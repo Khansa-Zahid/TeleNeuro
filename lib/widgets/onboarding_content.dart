@@ -6,16 +6,16 @@ class OnboardingContent extends StatelessWidget {
   final String description;
 
   const OnboardingContent({
-    Key? key,
+    super.key,
     required this.image,
     required this.title,
     required this.description,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -24,16 +24,16 @@ class OnboardingContent extends StatelessWidget {
               image,
               height: 300,
             ),
-          SizedBox(height: 30),
+          const SizedBox(height: 30),
           Text(
             title,
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
             ),
           ),
-          SizedBox(height: 10),
+          const SizedBox(height: 10),
           if (description.isNotEmpty)
             Text(
               description,

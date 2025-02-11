@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../find_doctor_screen.dart';
 
 class RequestScreen extends StatelessWidget {
-  const RequestScreen({Key? key}) : super(key: key);
+  const RequestScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

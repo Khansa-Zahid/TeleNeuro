@@ -3,13 +3,14 @@ import 'doctor_signup_screen.dart';
 import 'doctor_login_screen.dart';
 
 class DoctorScreen extends StatelessWidget {
-  const DoctorScreen({Key? key}) : super(key: key); // No doctor parameter
+  const DoctorScreen({super.key}); // No doctor parameter
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Doctor Portal'),
+        backgroundColor: Colors.teal[500],
       ),
       body: Center(
         child: Column(

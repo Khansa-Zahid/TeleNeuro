@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "205605587304",
+    "project_id": "fypteleneuro",
+    "storage_bucket": "fypteleneuro.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:205605587304:android:bc57013eed3fef8c31eedd",
+        "android_client_info": {
+          "package_name": "com.example.untitled"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBfWOKIsiTHXILTfGG_tnIJ1xPqrScw6KE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

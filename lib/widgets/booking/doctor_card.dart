@@ -6,11 +6,11 @@ class DoctorCard extends StatelessWidget {
   final VoidCallback onBook;
 
   const DoctorCard({
-    Key? key,
+    super.key,
     required this.doctorName,
     required this.specialization,
     required this.onBook,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

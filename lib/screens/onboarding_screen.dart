@@ -3,6 +3,8 @@ import 'profile_selection_screen.dart';
 import '../widgets/onboarding_content.dart'; // Make sure this import is correct
 
 class OnboardingScreen extends StatefulWidget {
+  const OnboardingScreen({super.key});
+
   @override
   _OnboardingScreenState createState() => _OnboardingScreenState();
 }
@@ -108,7 +110,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 onPressed: () {
                   _controller.jumpToPage(pages.length - 1);
                 },
-                child: Text(
+                child: const Text(
                   'Skip',
                   style: TextStyle(color: Colors.grey),
                 ),
@@ -121,14 +123,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               onPressed: () {
                 if (_currentIndex < pages.length - 1) {
                   _controller.nextPage(
-                    duration: Duration(milliseconds: 300),
+                    duration: const Duration(milliseconds: 300),
                     curve: Curves.easeIn,
                   );
                 } else {
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(
-                        builder: (context) => ProfileSelectionScreen()),
+                        builder: (context) => const ProfileSelectionScreen()),
                   );
                 }
               },

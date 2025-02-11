@@ -6,10 +6,10 @@ class BookingScreen extends StatelessWidget {
   final String specialization;
 
   const BookingScreen({
-    Key? key,
+    super.key,
     required this.doctorName,
     required this.specialization,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

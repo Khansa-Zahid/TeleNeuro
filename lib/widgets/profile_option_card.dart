@@ -9,13 +9,13 @@ class ProfileOptionCard extends StatelessWidget {
   final Color titleColor;
 
   const ProfileOptionCard({
-    Key? key,
+    super.key,
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.color,
     required this.titleColor,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +32,7 @@ class ProfileOptionCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: titleColor)),
-                Text(subtitle, style: TextStyle(fontSize: 16, color: Colors.grey)),
+                Text(subtitle, style: const TextStyle(fontSize: 16, color: Colors.grey)),
               ],
             ),
           ],

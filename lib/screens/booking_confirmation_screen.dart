@@ -7,11 +7,11 @@ class BookingConfirmationScreen extends StatelessWidget {
   final String appointmentType;
 
   const BookingConfirmationScreen({
-    Key? key,
+    super.key,
     required this.doctorName,
     required this.specialization,
     required this.appointmentType,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -56,7 +56,7 @@ class BookingConfirmationScreen extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => AppointmentStatusScreen(
+                    builder: (context) => const AppointmentStatusScreen(
                       isAccepted: true, // Change this to false to simulate rejection
                     ),
                   ),

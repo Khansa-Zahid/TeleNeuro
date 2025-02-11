@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 
 class DoctorProfileCompletionScreen extends StatefulWidget {
-  const DoctorProfileCompletionScreen({Key? key}) : super(key: key);
+  const DoctorProfileCompletionScreen({super.key});
 
   @override
   _DoctorProfileCompletionScreenState createState() =>

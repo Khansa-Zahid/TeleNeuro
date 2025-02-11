@@ -8,6 +8,8 @@ class DoctorListScreen extends StatelessWidget {
     // Add more doctors as needed
   ];
 
+   DoctorListScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(

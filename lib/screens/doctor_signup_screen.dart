@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class DoctorSignupScreen extends StatefulWidget {
-  const DoctorSignupScreen({Key? key}) : super(key: key);
+  const DoctorSignupScreen({super.key});
 
   @override
   _DoctorSignupScreenState createState() => _DoctorSignupScreenState();
@@ -16,18 +17,34 @@ class _DoctorSignupScreenState extends State<DoctorSignupScreen> {
   String specialization = '';
   String password = '';
 
-  void _signup() async {
-    if (_formKey.currentState!.validate()) {
-      // Save data to SharedPreferences
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      await prefs.setString('name', name);
-      await prefs.setString('email', email);
-      await prefs.setString('phoneNumber', phoneNumber);
-      await prefs.setString('specialization', specialization);
-      await prefs.setString('password', password);
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-      // Navigate to the Login screen after successful signup
-      Navigator.pushReplacementNamed(context, '/login');
+  Future<void> _signup() async {
+    if (_formKey.currentState!.validate()) {
+      try {
+        // 🔹 Register Doctor in Firebase Authentication
+        UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+
+        // 🔹 Store Doctor's Details in Firestore Database
+        await _firestore.collection('doctors').doc(userCredential.user!.uid).set({
+          'name': name,
+          'email': email,
+          'phoneNumber': phoneNumber,
+          'specialization': specialization,
+          'uid': userCredential.user!.uid,
+        });
+
+        // ✅ Navigate to the Login screen after successful signup
+        Navigator.pushReplacementNamed(context, '/login');
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
     }
   }
 
@@ -36,7 +53,7 @@ class _DoctorSignupScreenState extends State<DoctorSignupScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Doctor Signup')),
       body: Padding(
-         padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16.0),
         child: Form(
           key: _formKey,
           child: Column(

@@ -5,9 +5,9 @@ class AppointmentStatusScreen extends StatelessWidget {
   final bool isAccepted;
 
   const AppointmentStatusScreen({
-    Key? key,
+    super.key,
     required this.isAccepted,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +38,7 @@ class AppointmentStatusScreen extends StatelessWidget {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(
-                    builder: (context) =>  DoctorListScreen(),
+                    builder: (context) =>   DoctorListScreen(),
                   ),
                 );
               },
@@ -66,7 +66,7 @@ class AppointmentStatusScreen extends StatelessWidget {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(
-                    builder: (context) =>  DoctorListScreen(),
+                    builder: (context) =>   DoctorListScreen(),
                   ),
                 );
               },

@@ -1,9 +1,9 @@
-// doctor_login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'doctor_profile_screen.dart'; // Import the next screen
 
 class DoctorLoginScreen extends StatefulWidget {
-  const DoctorLoginScreen({Key? key}) : super(key: key);
+  const DoctorLoginScreen({super.key});
 
   @override
   _DoctorLoginScreenState createState() => _DoctorLoginScreenState();
@@ -20,11 +20,22 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen> {
       String? savedEmail = prefs.getString('email');
       String? savedPassword = prefs.getString('password');
 
+      if (savedEmail == null || savedPassword == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No registered account found')),
+        );
+        return;
+      }
+
       if (email == savedEmail && password == savedPassword) {
-        Navigator.pushReplacementNamed(context, '/setupProfile');
+        // ✅ Navigate to DoctorProfileScreen
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const DoctorProfileScreen()),
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Invalid credentials')),
+          const SnackBar(content: Text('Invalid email or password')),
         );
       }
     }
@@ -39,11 +50,19 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen> {
         child: Form(
           key: _formKey,
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               TextFormField(
                 decoration: const InputDecoration(labelText: 'Email'),
                 onChanged: (value) => email = value,
-                validator: (value) => value!.isEmpty ? 'Please enter your email' : null,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your email';
+                  } else if (!RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$').hasMatch(value)) {
+                    return 'Enter a valid email';
+                  }
+                  return null;
+                },
               ),
               TextFormField(
                 decoration: const InputDecoration(labelText: 'Password'),
@@ -58,7 +77,7 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen> {
               ),
               TextButton(
                 onPressed: () {
-                  Navigator.pop(context); // Go back to the Doctor Screen
+                  Navigator.pop(context); // Go back to previous screen
                 },
                 child: const Text('Don\'t have an account? Sign Up'),
               ),

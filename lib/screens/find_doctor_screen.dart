@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'booking_confirmation_screen.dart';
 import 'appointment_type_screen.dart'; // Ensure this import is present
 
 class FindDoctorScreen extends StatefulWidget {
-  const FindDoctorScreen({Key? key}) : super(key: key);
+  const FindDoctorScreen({super.key});
 
   @override
   _FindDoctorScreenState createState() => _FindDoctorScreenState();
@@ -79,10 +78,10 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                     ),
                   );
                 },
-                child: const Text('Book'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.teal, // Change here
                 ),
+                child: const Text('Book'),
               ),
             ),
           );

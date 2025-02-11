@@ -5,14 +5,14 @@ import 'client_screen.dart';
 import 'doctor_screen.dart';
 
 class ProfileSelectionScreen extends StatelessWidget {
-  const ProfileSelectionScreen({Key? key}) : super(key: key);
+  const ProfileSelectionScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 80,
-        flexibleSpace: Center(
+        flexibleSpace: const Center(
           child: Text(
             'Profile Selection',
             style: TextStyle(
@@ -39,7 +39,7 @@ class ProfileSelectionScreen extends StatelessWidget {
                 color: Colors.teal[800],
               ),
             ),
-            SizedBox(height: 24),
+            const SizedBox(height: 24),
             GestureDetector(
               onTap: () {
                 // Navigate to Client screen
@@ -53,12 +53,13 @@ class ProfileSelectionScreen extends StatelessWidget {
               child: ProfileOptionCard(
                 icon: Icons.person,
                 title: 'Client',
-                subtitle: 'Book Appointments, Consult with Doctors.',
+                subtitle: 'Book Appointments, ',
+                    //'Consult with Doctors.',
                 color: Colors.white,
                 titleColor: Colors.teal[800]!, // Ensure it's non-null
               ),
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             GestureDetector(
               onTap: () {
                 // Navigate to Doctor screen without any parameters
@@ -72,7 +73,8 @@ class ProfileSelectionScreen extends StatelessWidget {
               child: ProfileOptionCard(
                 icon: Icons.local_hospital,
                 title: 'Doctor',
-                subtitle: 'Book Appointments, Consult with patients.',
+                subtitle: 'Book Appointments,',
+                    //' Consult with patients.',
                 color: Colors.white,
                 titleColor: Colors.teal[800]!, // Ensure it's non-null
               ),
