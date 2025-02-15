@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'client_welcome_screen.dart';
 
 class ClientLoginScreen extends StatefulWidget {
@@ -11,6 +12,7 @@ class ClientLoginScreen extends StatefulWidget {
 
 class _ClientLoginScreenState extends State<ClientLoginScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
@@ -22,18 +24,36 @@ class _ClientLoginScreenState extends State<ClientLoginScreen> {
     });
 
     try {
+      // 🔹 Step 1: Sign in with Firebase Authentication
       final UserCredential userCredential = await _auth.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
-      // Navigate to the next page and pass the user's email
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => WelcomeScreen(patientName: userCredential.user?.email ?? 'Patient'),
-        ),
-      );
+      final User? user = userCredential.user;
+      if (user != null) {
+        // 🔹 Step 2: Check if the user exists in Firestore's "clients" collection
+        DocumentSnapshot clientDoc =
+        await _firestore.collection('clients').doc(user.uid).get();
+
+        if (clientDoc.exists) {
+          // ✅ User exists in Firestore -> Navigate to Welcome Screen
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => WelcomeScreen(
+                patientName: clientDoc['name'] ?? 'Patient',
+              ),
+            ),
+          );
+        } else {
+          // ❌ User is authenticated but not found in Firestore
+          await _auth.signOut(); // Log them out immediately
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Error: You are not registered as a client.')),
+          );
+        }
+      }
     } on FirebaseAuthException catch (e) {
       String message = 'An error occurred. Please try again.';
       if (e.code == 'user-not-found') {
@@ -57,7 +77,7 @@ class _ClientLoginScreenState extends State<ClientLoginScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.teal[600],
-        title: const Text('Login'),
+        title: const Text('Client Login'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),

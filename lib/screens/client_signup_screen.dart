@@ -1,31 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
-
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(); // Ensure Firebase is initialized
-  runApp(const MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Doctor Signup',
-      theme: ThemeData(
-        primarySwatch: Colors.teal,
-      ),
-      home: const ClientSignupScreen(),
-      routes: {
-        '/login': (context) => const LoginScreen(), // Define the LoginScreen route
-      },
-    );
-  }
-}
 
 class ClientSignupScreen extends StatefulWidget {
   const ClientSignupScreen({super.key});
@@ -36,51 +11,46 @@ class ClientSignupScreen extends StatefulWidget {
 
 class _ClientSignupScreenState extends State<ClientSignupScreen> {
   final _formKey = GlobalKey<FormState>();
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-
   String name = '';
   String email = '';
   String phoneNumber = '';
-  String specialization = '';
   String password = '';
-  bool isLoading = false;
+
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Future<void> _signup() async {
     if (_formKey.currentState!.validate()) {
-      setState(() => isLoading = true);
-
       try {
-        // Create user with email and password
+        print("Creating user...");
         UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
           email: email,
           password: password,
         );
+        print("User created with UID: ${userCredential.user!.uid}");
 
-        // Update user profile with name
-        await userCredential.user!.updateDisplayName(name);
-
-        // Navigate to login screen after successful signup
-        Navigator.pushReplacementNamed(context, '/login');
+        print("Storing client data in Firestore...");
+        await _firestore.collection('clients').doc(userCredential.user!.uid).set({
+          'name': name,
+          'email': email,
+          'phoneNumber': phoneNumber,
+          'uid': userCredential.user!.uid,
+        }).then((_) {
+          print("✅ Firestore write successful");
+        }).catchError((error) {
+          print("Firestore write failed: $error");
+        });
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Signup successful!')),
         );
-      } on FirebaseAuthException catch (e) {
-        // Handle Firebase errors
-        String message;
-        if (e.code == 'email-already-in-use') {
-          message = 'This email is already in use.';
-        } else if (e.code == 'weak-password') {
-          message = 'The password is too weak.';
-        } else {
-          message = 'An unexpected error occurred. Please try again.';
-        }
 
+        Navigator.pushReplacementNamed(context, '/login');
+      } catch (e) {
+        print("Signup Error: $e");
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
+          SnackBar(content: Text('Error: $e')),
         );
-      } finally {
-        setState(() => isLoading = false);
       }
     }
   }
@@ -88,23 +58,18 @@ class _ClientSignupScreenState extends State<ClientSignupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Doctor Signup'),
-        backgroundColor: Colors.teal[600],
-      ),
+      appBar: AppBar(title: const Text('Client Signup')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Form(
           key: _formKey,
-          child: ListView(
+          child: Column(
             children: [
               TextFormField(
                 decoration: const InputDecoration(labelText: 'Name'),
                 onChanged: (value) => name = value,
-                validator: (value) =>
-                value!.isEmpty ? 'Please enter your name' : null,
+                validator: (value) => value!.isEmpty ? 'Please enter your name' : null,
               ),
-              const SizedBox(height: 16),
               TextFormField(
                 decoration: const InputDecoration(labelText: 'Email'),
                 keyboardType: TextInputType.emailAddress,
@@ -119,22 +84,12 @@ class _ClientSignupScreenState extends State<ClientSignupScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
               TextFormField(
                 decoration: const InputDecoration(labelText: 'Phone Number'),
                 keyboardType: TextInputType.phone,
                 onChanged: (value) => phoneNumber = value,
-                validator: (value) =>
-                value!.isEmpty ? 'Please enter your phone number' : null,
+                validator: (value) => value!.isEmpty ? 'Please enter your phone number' : null,
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                decoration: const InputDecoration(labelText: 'Specialization'),
-                onChanged: (value) => specialization = value,
-                validator: (value) =>
-                value!.isEmpty ? 'Please enter your specialization' : null,
-              ),
-              const SizedBox(height: 16),
               TextFormField(
                 decoration: const InputDecoration(labelText: 'Password'),
                 obscureText: true,
@@ -149,40 +104,14 @@ class _ClientSignupScreenState extends State<ClientSignupScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 24),
-              isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : ElevatedButton(
+              const SizedBox(height: 20),
+              ElevatedButton(
                 onPressed: _signup,
                 child: const Text('Sign Up'),
-              ),
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: () {
-                  Navigator.pushReplacementNamed(context, '/login');
-                },
-                child: const Text('Already have an account? Login'),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class LoginScreen extends StatelessWidget {
-  const LoginScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Login Screen'),
-        backgroundColor: Colors.teal[600],
-      ),
-      body: const Center(
-        child: Text('Login Screen Placeholder'),
       ),
     );
   }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'appointment_type_screen.dart'; // Ensure this import is present
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'appointment_type_screen.dart';
 
 class FindDoctorScreen extends StatefulWidget {
   const FindDoctorScreen({super.key});
@@ -10,33 +10,34 @@ class FindDoctorScreen extends StatefulWidget {
 }
 
 class _FindDoctorScreenState extends State<FindDoctorScreen> {
-  List<Map<String, String>> doctors = [];
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadDoctors();
-  }
+  Future<List<Map<String, String>>> _fetchDoctors() async {
+    try {
+      QuerySnapshot querySnapshot = await _firestore.collection('doctors').get();
 
-  _loadDoctors() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    setState(() {
-      doctors = [
-        {
-          'name': prefs.getString('doctor1Name') ?? '',
-          'specialization': prefs.getString('doctor1Specialization') ?? '',
-          'email': prefs.getString('doctor1Email') ?? '',
-          'phoneNumber': prefs.getString('doctor1PhoneNumber') ?? '',
-        },
-        {
-          'name': prefs.getString('doctor2Name') ?? '',
-          'specialization': prefs.getString('doctor2Specialization') ?? '',
-          'email': prefs.getString('doctor2Email') ?? '',
-          'phoneNumber': prefs.getString('doctor2PhoneNumber') ?? '',
-        },
-        // Add more doctor entries as needed
-      ];
-    });
+      if (querySnapshot.docs.isEmpty) {
+        print('No doctors found in Firestore.');
+      }
+
+      List<Map<String, String>> doctorsList = querySnapshot.docs.map((doc) {
+        var data = doc.data() as Map<String, dynamic>;
+
+        print('Fetched Doctor: $data'); // Debugging
+
+        return {
+          'name': (data['name'] ?? 'Unknown').toString(),
+          'specialization': (data['specialization'] ?? 'Not specified').toString(),
+          'email': (data['email'] ?? 'No email').toString(),
+          'phoneNumber': (data['phoneNumber'] ?? 'No phone').toString(),
+        };
+      }).toList();
+
+      return doctorsList;
+    } catch (e) {
+      print('Error fetching doctors: $e');
+      return [];
+    }
   }
 
   @override
@@ -46,44 +47,59 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
         title: const Text('Find a Doctor'),
         backgroundColor: Colors.teal,
       ),
-      body: ListView.builder(
-        itemCount: doctors.length,
-        itemBuilder: (context, index) {
-          final doctor = doctors[index];
-          return Card(
-            margin: const EdgeInsets.all(8.0),
-            child: ListTile(
-              leading: const Icon(Icons.medical_services, size: 40, color: Colors.teal),
-              title: Text(
-                doctor['name'] ?? '',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Specialization: ${doctor['specialization'] ?? ''}'),
-                  Text('Email: ${doctor['email'] ?? ''}'),
-                  Text('Phone: ${doctor['phoneNumber'] ?? ''}'),
-                ],
-              ),
-              trailing: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => AppointmentTypeScreen(
-                        doctorName: doctor['name'] ?? '',
-                        specialization: doctor['specialization'] ?? '',
-                      ),
+      body: FutureBuilder<List<Map<String, String>>>(
+        future: _fetchDoctors(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          } else if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(child: Text('No doctors found.'));
+          }
+
+          List<Map<String, String>> doctors = snapshot.data!;
+
+          return ListView.builder(
+            itemCount: doctors.length,
+            itemBuilder: (context, index) {
+              final doctor = doctors[index];
+              return Card(
+                margin: const EdgeInsets.all(8.0),
+                child: ListTile(
+                  leading: const Icon(Icons.medical_services, size: 40, color: Colors.teal),
+                  title: Text(
+                    doctor['name'] ?? '',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Specialization: ${doctor['specialization'] ?? ''}'),
+                      Text('Email: ${doctor['email'] ?? ''}'),
+                      Text('Phone: ${doctor['phoneNumber'] ?? ''}'),
+                    ],
+                  ),
+                  trailing: ElevatedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => AppointmentTypeScreen(
+                            doctorName: doctor['name'] ?? '',
+                            specialization: doctor['specialization'] ?? '',
+                          ),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal,
                     ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.teal, // Change here
+                    child: const Text('Book'),
+                  ),
                 ),
-                child: const Text('Book'),
-              ),
-            ),
+              );
+            },
           );
         },
       ),

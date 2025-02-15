@@ -2,11 +2,11 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'screens/onboarding_screen.dart';
-import 'screens/doctor_list_screen.dart'; // Import the Doctor List Screen
-import 'screens/doctor_signup_screen.dart'; // Import the Doctor Signup Screen
-import 'screens/doctor_login_screen.dart'; // Import the Doctor Login Screen
-import 'screens/find_doctor_screen.dart'; // Import the Find Doctor Screen
-import 'screens/doctor_screen.dart'; // Import the Doctor Screen
+import 'screens/doctor_list_screen.dart';
+import 'screens/doctor_signup_screen.dart';
+import 'screens/doctor_login_screen.dart';
+import 'screens/find_doctor_screen.dart';
+import 'screens/doctor_screen.dart';
 import 'screens/client_login_screen.dart';
 import 'screens/client_signup_screen.dart';
 

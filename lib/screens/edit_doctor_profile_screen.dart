@@ -16,7 +16,7 @@ class _EditDoctorProfileScreenState extends State<EditDoctorProfileScreen> {
   final TextEditingController _contactController = TextEditingController();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final String doctorId = 'ER4DJqEK8lkp8M9HVnT7'; // Your Firestore document ID
+  final String doctorId = 'ER4DJqEK8lkp8M9HVnT7'; 
 
   @override
   void initState() {
