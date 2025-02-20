@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'booking_confirmation_screen.dart';
+import 'message_chat_screen.dart';
 
 class AppointmentTypeScreen extends StatelessWidget {
   final String doctorName;
@@ -66,10 +67,9 @@ class AppointmentTypeScreen extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => BookingConfirmationScreen(
+                    builder: (context) => MessageChatScreen(
                       doctorName: doctorName,
                       specialization: specialization,
-                      appointmentType: "Message",
                     ),
                   ),
                 );
