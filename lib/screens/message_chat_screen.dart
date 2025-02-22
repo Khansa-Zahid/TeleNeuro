@@ -17,12 +17,13 @@ class MessageChatScreen extends StatefulWidget {
 
 class _MessageChatScreenState extends State<MessageChatScreen> {
   final TextEditingController _messageController = TextEditingController();
-  final DatabaseReference _dbRef = FirebaseDatabase.instance.ref("messages");
+  late DatabaseReference _dbRef;
   final List<Map<String, dynamic>> _messages = [];
 
   @override
   void initState() {
     super.initState();
+    _dbRef = FirebaseDatabase.instance.ref("messages/${widget.doctorName}"); // Store messages per doctor
     _listenForMessages();
   }
 
@@ -53,7 +54,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     if (messageText.isNotEmpty) {
       _dbRef.push().set({
         "text": messageText,
-        "sender": widget.doctorName, // Using doctor's name dynamically
+        "sender": "Patient", // Assuming the patient is sending the message
         "timestamp": ServerValue.timestamp,
       });
       _messageController.clear();
@@ -80,7 +81,9 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                   title: Text(msg["text"], style: const TextStyle(fontSize: 16)),
                   subtitle: Text("From: ${msg["sender"]}"),
                   trailing: Text(
-                    DateTime.fromMillisecondsSinceEpoch(msg["timestamp"] as int).toLocal().toString(),
+                    DateTime.fromMillisecondsSinceEpoch(msg["timestamp"] as int)
+                        .toLocal()
+                        .toString(),
                     style: const TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                 );

@@ -6,6 +6,7 @@ class AppointmentTypeScreen extends StatelessWidget {
   final String doctorName;
   final String specialization;
 
+
   const AppointmentTypeScreen({
     super.key,
     required this.doctorName,
@@ -70,6 +71,7 @@ class AppointmentTypeScreen extends StatelessWidget {
                     builder: (context) => MessageChatScreen(
                       doctorName: doctorName,
                       specialization: specialization,
+
                     ),
                   ),
                 );

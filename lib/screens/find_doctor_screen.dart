@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'appointment_type_screen.dart';
 
+
 class FindDoctorScreen extends StatefulWidget {
   const FindDoctorScreen({super.key});
 
@@ -17,25 +18,32 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
       QuerySnapshot querySnapshot = await _firestore.collection('doctors').get();
 
       if (querySnapshot.docs.isEmpty) {
-        print('No doctors found in Firestore.');
+        debugPrint('No doctors found in Firestore.');
       }
 
       List<Map<String, String>> doctorsList = querySnapshot.docs.map((doc) {
-        var data = doc.data() as Map<String, dynamic>;
+        var data = doc.data() as Map<String, dynamic>?;
 
-        print('Fetched Doctor: $data'); // Debugging
+        if (data == null) {
+          return {
+            'name': 'Unknown',
+            'specialization': 'Not specified',
+            'email': 'No email',
+            'phoneNumber': 'No phone',
+          };
+        }
 
         return {
-          'name': (data['name'] ?? 'Unknown').toString(),
-          'specialization': (data['specialization'] ?? 'Not specified').toString(),
-          'email': (data['email'] ?? 'No email').toString(),
-          'phoneNumber': (data['phoneNumber'] ?? 'No phone').toString(),
+          'name': data['name']?.toString() ?? 'Unknown',
+          'specialization': data['specialization']?.toString() ?? 'Not specified',
+          'email': data['email']?.toString() ?? 'No email',
+          'phoneNumber': data['phoneNumber']?.toString() ?? 'No phone',
         };
       }).toList();
 
       return doctorsList;
     } catch (e) {
-      print('Error fetching doctors: $e');
+      debugPrint('Error fetching doctors: $e');
       return [];
     }
   }
@@ -86,8 +94,8 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                         context,
                         MaterialPageRoute(
                           builder: (context) => AppointmentTypeScreen(
-                            doctorName: doctor['name'] ?? '',
-                            specialization: doctor['specialization'] ?? '',
+                            doctorName: doctor['name']!,
+                            specialization: doctor['specialization']!,
                           ),
                         ),
                       );
