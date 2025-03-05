@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'appointment_type_screen.dart';
 
-
 class FindDoctorScreen extends StatefulWidget {
-  const FindDoctorScreen({super.key});
+  final String patientId;
+
+  const FindDoctorScreen({super.key, required this.patientId});
 
   @override
   _FindDoctorScreenState createState() => _FindDoctorScreenState();
@@ -19,6 +20,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
 
       if (querySnapshot.docs.isEmpty) {
         debugPrint('No doctors found in Firestore.');
+        return [];
       }
 
       List<Map<String, String>> doctorsList = querySnapshot.docs.map((doc) {
@@ -26,6 +28,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
 
         if (data == null) {
           return {
+            'doctorId': doc.id, // Firestore document ID as doctor ID
             'name': 'Unknown',
             'specialization': 'Not specified',
             'email': 'No email',
@@ -34,6 +37,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
         }
 
         return {
+          'doctorId': doc.id,
           'name': data['name']?.toString() ?? 'Unknown',
           'specialization': data['specialization']?.toString() ?? 'Not specified',
           'email': data['email']?.toString() ?? 'No email',
@@ -94,8 +98,10 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                         context,
                         MaterialPageRoute(
                           builder: (context) => AppointmentTypeScreen(
+                            doctorId: doctor['doctorId']!,
                             doctorName: doctor['name']!,
                             specialization: doctor['specialization']!,
+                            patientId: widget.patientId,
                           ),
                         ),
                       );

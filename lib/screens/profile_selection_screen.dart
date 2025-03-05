@@ -52,8 +52,8 @@ class ProfileSelectionScreen extends StatelessWidget {
               },
               child: ProfileOptionCard(
                 icon: Icons.person,
-                title: 'Client',
-                subtitle: 'Book Appointments, ',
+                title: 'Patient',
+                subtitle: 'Book Appointments',
                     //'Consult with Doctors.',
                 color: Colors.white,
                 titleColor: Colors.teal[800]!, // Ensure it's non-null
@@ -73,7 +73,7 @@ class ProfileSelectionScreen extends StatelessWidget {
               child: ProfileOptionCard(
                 icon: Icons.local_hospital,
                 title: 'Doctor',
-                subtitle: 'Book Appointments,',
+                subtitle: 'Book Appointments',
                     //' Consult with patients.',
                 color: Colors.white,
                 titleColor: Colors.teal[800]!, // Ensure it's non-null

@@ -1,140 +1,167 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'edit_doctor_profile_screen.dart';
+import 'package:fyp_teleneuro/screens/doctor_screen.dart';
+import 'chat_screen.dart';
+import 'chat_service.dart';
 
 class DoctorProfileScreen extends StatefulWidget {
-  const DoctorProfileScreen({super.key});
+  final String doctorId;
+
+  DoctorProfileScreen({required this.doctorId});
 
   @override
-  State<DoctorProfileScreen> createState() => _DoctorProfileScreenState();
+  _DoctorProfileScreenState createState() => _DoctorProfileScreenState();
 }
 
 class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
-  String doctorName = "Loading...";
-  String specialization = "";
+  final ChatService _chatService = ChatService();
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  @override
-  void initState() {
-    super.initState();
-    _fetchDoctorProfile();
-  }
-
-  Future<void> _fetchDoctorProfile() async {
+  Future<List<String>> getPreviousPatients() async {
     try {
-      DocumentSnapshot doc = await FirebaseFirestore.instance
-          .collection('doctors')
-          .doc('doctor123') // Change this to the actual doctor ID
+      QuerySnapshot querySnapshot = await _firestore
+          .collection('chats')
+          .where('doctor_id', isEqualTo: widget.doctorId)
           .get();
 
-      if (doc.exists) {
-        setState(() {
-          doctorName = doc["name"] ?? "Unknown";
-          specialization = doc["specialization"] ?? "";
-        });
-      }
+      List<String> patientIds = querySnapshot.docs
+          .map((doc) => doc['patient_id'].toString()) // Extract patient IDs
+          .toList();
+
+      return patientIds;
     } catch (e) {
-      print("Error fetching doctor profile: $e");
+      print("Error fetching previous patients: $e");
+      return [];
     }
   }
 
-  void _handleMenuOption(String value) {
-    if (value == 'Settings') {
-      Navigator.pushNamed(context, '/settings');
-    } else if (value == 'Logout') {
-      Navigator.pushReplacementNamed(context, '/login');
+  void openChat(String patientId) async {
+    String chatId = await _chatService.getChatId(widget.doctorId, patientId);
+
+    if (chatId.isNotEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ChatScreen(
+            chatId: chatId,
+            doctorId: widget.doctorId,
+            patientId: patientId,
+          ),
+        ),
+      );
+    } else {
+      print("Failed to get chat ID.");
     }
+  }
+
+  void showAppointments(BuildContext context) async {
+    List<String> patientList = await getPreviousPatients();
+
+    showModalBottomSheet(
+      context: context,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+      ),
+      builder: (context) {
+        return Container(
+          padding: EdgeInsets.all(10),
+          height: 400,
+          child: patientList.isEmpty
+              ? Center(child: Text("No appointments found."))
+              : ListView.builder(
+                  itemCount: patientList.length,
+                  itemBuilder: (context, index) {
+                    String patientId = patientList[index];
+
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.blue.shade100,
+                        child: Icon(Icons.person, color: Colors.blue),
+                      ),
+                      title: Text(
+                        "Chat with $patientId",
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text("Tap to start conversation"),
+                      trailing: Icon(Icons.chat, color: Colors.blue),
+                      onTap: () {
+                        Navigator.pop(context);
+                        openChat(patientId);
+                      },
+                    );
+                  },
+                ),
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Doctor Profile'),
+        title: Text("Doctor Profile"),
         backgroundColor: Colors.teal[500],
-        actions: [
-          PopupMenuButton<String>(
-            onSelected: _handleMenuOption,
-            itemBuilder: (BuildContext context) => [
-              const PopupMenuItem<String>(
-                value: 'Settings',
-                child: Text('Settings'),
-              ),
-              const PopupMenuItem<String>(
-                value: 'Logout',
-                child: Text('Logout'),
-              ),
-            ],
-          ),
-        ],
       ),
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            UserAccountsDrawerHeader(
-              decoration: const BoxDecoration(color: Colors.teal),
-              accountName: Text(doctorName, style: const TextStyle(color: Colors.white)),
-              accountEmail: const Text('john.doe@example.com', style: TextStyle(color: Colors.white)),
-              currentAccountPicture: const CircleAvatar(
-                backgroundColor: Colors.white,
-                child: Icon(Icons.person, size: 40, color: Colors.teal),
+            DrawerHeader(
+              decoration: BoxDecoration(color: Colors.teal[500]),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: Colors.white,
+                    child: Icon(Icons.person, size: 40, color: Colors.blue),
+                  ),
+                  SizedBox(height: 10),
+                  Text(
+                    "Doctor Dashboard",
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold),
+                  ),
+                ],
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.home),
-              title: const Text('Home'),
-              onTap: () => Navigator.pushNamed(context, '/home'),
+              leading: Icon(Icons.calendar_today, color: Colors.blue),
+              title: Text("Appointments"),
+              onTap: () {
+                Navigator.pop(context);
+                showAppointments(context);
+              },
             ),
+            Divider(),
             ListTile(
-              leading: const Icon(Icons.schedule),
-              title: const Text('Appointments'),
-              onTap: () => Navigator.pushNamed(context, '/appointments'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.settings),
-              title: const Text('Settings'),
-              onTap: () => Navigator.pushNamed(context, '/settings'),
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.logout, color: Colors.red),
-              title: const Text('Logout', style: TextStyle(color: Colors.red)),
-              onTap: () => Navigator.pushReplacementNamed(context, '/login'),
-            ),
+                leading: Icon(
+                  Icons.logout,
+                  color: Colors.blue,
+                ),
+                title: Text('Logout'),
+                onTap: () {
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => const DoctorScreen()),
+                    (Route<dynamic> route) => false,
+                  );
+                }
+                // ),
+
+                ),
           ],
         ),
       ),
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const CircleAvatar(
-                radius: 50,
-                backgroundColor: Colors.teal,
-                child: Icon(Icons.person, size: 50, color: Colors.white),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                doctorName,
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              Text(
-                specialization,
-                style: const TextStyle(fontSize: 16, color: Colors.grey),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => EditDoctorProfileScreen()),
-                ),
-                icon: const Icon(Icons.edit),
-                label: const Text('Edit Profile'),
-              ),
-            ],
-          ),
+        child: Text(
+          "Welcome, Doctor!",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
       ),
     );

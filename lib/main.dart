@@ -10,21 +10,31 @@ import 'screens/doctor_screen.dart';
 import 'screens/client_login_screen.dart';
 import 'screens/client_signup_screen.dart';
 
-void main()async {
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  if(kIsWeb) {
-    Firebase.initializeApp(options: FirebaseOptions(
-        apiKey: "AIzaSyDJodDDsyLbb9xvMRRUDNmlhV8EW4hTRis",
-        authDomain: "fypteleneuro.firebaseapp.com",
-        projectId: "fypteleneuro",
-        storageBucket: "fypteleneuro.firebasestorage.app",
-        messagingSenderId: "205605587304",
-        appId: "1:205605587304:web:1a40cedb7f911cc531eedd",
-        measurementId: "G-BTCBSZ9JQS"));
+
+  try {
+    // Initialize Firebase
+    if (kIsWeb) {
+      await Firebase.initializeApp(
+        options: FirebaseOptions(
+          apiKey: "AIzaSyDJodDDsyLbb9xvMRRUDNmlhV8EW4hTRis",
+          authDomain: "fypteleneuro.firebaseapp.com",
+          projectId: "fypteleneuro",
+          storageBucket: "fypteleneuro.firebasestorage.app",
+          messagingSenderId: "205605587304",
+          appId: "1:205605587304:web:1a40cedb7f911cc531eedd",
+          measurementId: "G-BTCBSZ9JQS",
+        ),
+      );
+    } else {
+      await Firebase.initializeApp();
+    }
+  } catch (e) {
+    print("Error initializing Firebase: $e");
   }
-  else{
-    await Firebase.initializeApp();
-  }
+
   runApp(const MyApp());
 }
 
@@ -39,15 +49,31 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.teal,
       ),
-      home: const OnboardingScreen(), // Removed const keyword
-      routes: {
-        '/doctor': (context) => const DoctorScreen(),
-        '/signup': (context) => const DoctorSignupScreen(),
-        '/login': (context) => const DoctorLoginScreen(),
-        '/findDoctor': (context) => const FindDoctorScreen(),
-        '/doctorList': (context) =>  DoctorListScreen(),
-        '/clientLoginsScreen':(context) =>ClientLoginScreen(),
-        '/clientSignupScreen':(context)=>ClientSignupScreen(),
+      home: const OnboardingScreen(),
+      onGenerateRoute: (settings) {
+        switch (settings.name) {
+          case '/doctor':
+            return MaterialPageRoute(builder: (context) => const DoctorScreen());
+          case '/signup':
+            return MaterialPageRoute(builder: (context) => const DoctorSignupScreen());
+          case '/login':
+            return MaterialPageRoute(builder: (context) => const DoctorLoginScreen());
+          case '/findDoctor':
+            final String? patientId = settings.arguments as String?;
+            return MaterialPageRoute(
+              builder: (context) => FindDoctorScreen(patientId: patientId ?? "default_id"),
+            );
+          case '/doctorList':
+            return MaterialPageRoute(builder: (context) => DoctorListScreen());
+          case '/clientLoginScreen':
+            return MaterialPageRoute(builder: (context) => ClientLoginScreen());
+          case '/clientSignupScreen':
+            return MaterialPageRoute(builder: (context) => ClientSignupScreen());
+
+
+          default:
+            return MaterialPageRoute(builder: (context) => const OnboardingScreen());
+        }
       },
     );
   }

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../find_doctor_screen.dart';
 
 class RequestScreen extends StatelessWidget {
-  const RequestScreen({super.key});
+  final String patientId; // Add patientId as a required parameter
+
+  const RequestScreen({super.key, required this.patientId});
 
   @override
   Widget build(BuildContext context) {
@@ -41,11 +43,11 @@ class RequestScreen extends StatelessWidget {
               Center(
                 child: ElevatedButton(
                   onPressed: () {
-                    // Navigate to FindDoctorScreen
+                    // Navigate to FindDoctorScreen and pass patientId
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const FindDoctorScreen(),
+                        builder: (context) => FindDoctorScreen(patientId: patientId),
                       ),
                     );
                   },

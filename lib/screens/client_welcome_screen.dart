@@ -3,7 +3,6 @@ import 'profile_selection_screen.dart';
 import 'dart:async';
 import 'find_doctor_screen.dart';
 
-
 void main() {
   runApp(const MyApp());
 }
@@ -15,15 +14,18 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: const WelcomeScreen(patientName: "John Doe"),
+      home: const WelcomeScreen(
+          patientName: "John Doe", patientId: "patient1"), // Add patientId here
     );
   }
 }
 
 class WelcomeScreen extends StatefulWidget {
   final String patientName;
+  final String patientId; // Add patientId
 
-  const WelcomeScreen({super.key, required this.patientName});
+  const WelcomeScreen(
+      {super.key, required this.patientName, required this.patientId});
 
   @override
   _WelcomeScreenState createState() => _WelcomeScreenState();
@@ -108,21 +110,26 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => FindDoctorScreen()),
+                  MaterialPageRoute(
+                    builder: (context) => FindDoctorScreen(
+                        patientId: widget.patientId), // Pass patientId here
+                  ),
                 );
               },
             ),
+            Divider(),
             ListTile(
                 leading: const Icon(Icons.logout, color: Colors.teal),
                 title: const Text("Logout"),
                 onTap: () {
                   Navigator.pushAndRemoveUntil(
                     context,
-                    MaterialPageRoute(builder: (context) => const ProfileSelectionScreen()),
-                        (Route<dynamic> route) => false, // This removes all previous routes
+                    MaterialPageRoute(
+                        builder: (context) => const ProfileSelectionScreen()),
+                    (Route<dynamic> route) =>
+                        false, // This removes all previous routes
                   );
-                }
-                ),
+                }),
           ],
         ),
       ),

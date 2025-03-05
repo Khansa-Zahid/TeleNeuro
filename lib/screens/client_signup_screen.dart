@@ -45,7 +45,7 @@ class _ClientSignupScreenState extends State<ClientSignupScreen> {
           const SnackBar(content: Text('Signup successful!')),
         );
 
-        Navigator.pushReplacementNamed(context, '/login');
+        Navigator.pushReplacementNamed(context, '/clientLoginScreen');
       } catch (e) {
         print("Signup Error: $e");
         ScaffoldMessenger.of(context).showSnackBar(

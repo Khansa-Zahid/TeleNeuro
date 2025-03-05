@@ -23,6 +23,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
+        coreLibraryDesugaringEnabled true
     }
 
     kotlinOptions {
@@ -35,6 +36,10 @@ android {
             signingConfig = signingConfigs.debug  // ✅ Replace with actual signing config for production
         }
     }
+//    aaptOptions {
+//        noCompress 'tflite'
+//        noCompress 'lite'
+//    }
 }
 
 flutter {
@@ -46,4 +51,5 @@ dependencies {
     implementation 'com.google.firebase:firebase-auth' // ✅ Add Firebase Auth if needed
     implementation 'com.google.firebase:firebase-firestore' // ✅ Add Firestore if needed
     implementation 'com.google.firebase:firebase-messaging' // ✅ Add Firebase Cloud Messaging if needed
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.3'
 }

@@ -37,6 +37,9 @@ dependencies:
   firebase_auth_web: ^5.13.8
   cloud_firestore: ^5.6.3
   provider: ^6.1.2
+  intl: ^0.18.1
+  firebase_messaging: ^15.2.4
+  flutter_local_notifications: ^18.0.1
 
 
 
@@ -70,6 +73,7 @@ dev_dependencies:
   vector_graphics: ^1.1.18
   vector_graphics_compiler: ^1.1.16
   vm_service: ^14.3.0
+  firebase_messaging: ^15.2.4
 
 
 

@@ -43,11 +43,11 @@ class _ClientLoginScreenState extends State<ClientLoginScreen> {
             MaterialPageRoute(
               builder: (context) => WelcomeScreen(
                 patientName: clientDoc['name'] ?? 'Patient',
+                patientId: user.uid, // Pass the patientId (user UID)
               ),
             ),
           );
         } else {
-          // ❌ User is authenticated but not found in Firestore
           await _auth.signOut(); // Log them out immediately
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Error: You are not registered as a client.')),

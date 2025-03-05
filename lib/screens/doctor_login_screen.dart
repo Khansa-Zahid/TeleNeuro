@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'doctor_profile_screen.dart';
 
 class DoctorLoginScreen extends StatefulWidget {
-  const DoctorLoginScreen({super.key});
+  const DoctorLoginScreen({Key? key}) : super(key: key);
 
   @override
   State<DoctorLoginScreen> createState() => _DoctorLoginScreenState();
@@ -33,15 +33,13 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen> {
       final User? user = userCredential.user;
       if (user != null) {
         // 🔹 Step 2: Check if the user exists in Firestore's "doctors" collection
-        DocumentSnapshot doctorDoc =
-        await _firestore.collection('doctors').doc(user.uid).get();
+        DocumentSnapshot doctorDoc = await _firestore.collection('doctors').doc(user.uid).get();
 
         if (doctorDoc.exists) {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (context) => DoctorProfileScreen(
-              ),
+              builder: (context) => DoctorProfileScreen(doctorId: user.uid), // ✅ FIXED
             ),
           );
         } else {
