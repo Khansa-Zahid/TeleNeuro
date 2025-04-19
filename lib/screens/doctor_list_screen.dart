@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'doctor_screen.dart';
 
 class DoctorListScreen extends StatelessWidget {
+  final String chatId;
+  final String patientId;
   final List<Map<String, String>> doctors = [
     {'name': 'Dr. John Doe', 'specialty': 'Cardiologist'},
     {'name': 'Dr. Jane Smith', 'specialty': 'Neurologist'},
     // Add more doctors as needed
   ];
 
-   DoctorListScreen({super.key});
+   DoctorListScreen({super.key, required this.chatId, required this.patientId});
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +29,7 @@ class DoctorListScreen extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => const DoctorScreen(), // No doctor parameter
+                  builder: (context) =>  DoctorScreen(), // No doctor parameter
                 ),
               );
             },

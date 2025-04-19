@@ -1,20 +1,26 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'booking_confirmation_screen.dart';
 import 'chat_screen.dart';
 import 'chat_service.dart';
+import 'video_call_screen.dart';
 
 class AppointmentTypeScreen extends StatefulWidget {
   final String patientId;
+  final String patientName; // New parameter added
   final String doctorId;
   final String doctorName;
   final String specialization;
+  final String channelName;
 
   const AppointmentTypeScreen({
     super.key,
     required this.patientId,
+    required this.patientName, // Required now
     required this.doctorId,
     required this.doctorName,
     required this.specialization,
+    required this.channelName,
   });
 
   @override
@@ -43,28 +49,6 @@ class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
       print("Error initializing chat: $e");
     }
   }
-
-  void _startChat() async {
-    try {
-      if (chatId == null || chatId!.isEmpty) {
-        String id = await _chatService.getChatId(widget.doctorId, widget.patientId);
-        if (id.isNotEmpty) {
-          setState(() {
-            chatId = id;
-          });
-          _navigateToChat(id);
-        }
-      } else {
-        _navigateToChat(chatId!);
-      }
-    } catch (e) {
-      print("Error fetching chat ID: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Failed to start chat. Please try again.")),
-      );
-    }
-  }
-
   void _navigateToChat(String chatId) {
     Navigator.push(
       context,
@@ -76,6 +60,70 @@ class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _bookAppointment(String appointmentType) async {
+    try {
+      FirebaseFirestore firestore = FirebaseFirestore.instance;
+
+      DocumentReference appointmentRef = await firestore.collection("appointments").add({
+        "client_id": widget.patientId,
+        "doctor_id": widget.doctorId,
+        "status": "pending",
+        "date_time": DateTime.now().toIso8601String(),
+        "appointment_type": appointmentType,
+      });
+
+      String appointmentId = appointmentRef.id;
+
+      await _storeNotification(
+        receiverId: widget.doctorId,
+        title: "New Appointment Request",
+        message: "A patient has booked an appointment.",
+        type: "appointment",
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Appointment booked successfully!")),
+      );
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => BookingConfirmationScreen(
+            doctorName: widget.doctorName,
+            specialization: widget.specialization,
+            appointmentType: appointmentType,
+            appointmentId: appointmentId,
+          ),
+        ),
+      );
+    } catch (e) {
+      print("Error booking appointment: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Failed to book appointment. Try again.")),
+      );
+    }
+  }
+
+  Future<void> _storeNotification({
+    required String receiverId,
+    required String title,
+    required String message,
+    required String type,
+  }) async {
+    try {
+      await FirebaseFirestore.instance.collection("notifications").add({
+        "receiver_id": receiverId,
+        "title": title,
+        "message": message,
+        "type": type,
+        "timestamp": FieldValue.serverTimestamp(),
+        "read": false,
+      });
+    } catch (e) {
+      print("Error storing notification: $e");
+    }
   }
 
   Widget _buildAppointmentOption({
@@ -120,45 +168,15 @@ class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Voice Call Option
-            _buildAppointmentOption(
-              title: "Voice Call",
-              subtitle: "Talk to the doctor over a call.",
-              icon: Icons.call,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => BookingConfirmationScreen(
-                      doctorName: widget.doctorName,
-                      specialization: widget.specialization,
-                      appointmentType: "Voice Call",
-                    ),
-                  ),
-                );
-              },
-            ),
-
-            // Video Call Option
             _buildAppointmentOption(
               title: "Video Call",
               subtitle: "Have a face-to-face consultation.",
               icon: Icons.video_call,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => BookingConfirmationScreen(
-                      doctorName: widget.doctorName,
-                      specialization: widget.specialization,
-                      appointmentType: "Video Call",
-                    ),
-                  ),
-                );
-              },
+              onTap: () => _bookAppointment("Video Call"),
             ),
 
-            // Message Option
+            const SizedBox(height: 12),
+
             _buildAppointmentOption(
               title: "Message",
               subtitle: "Chat with the doctor for quick queries.",
@@ -185,7 +203,6 @@ class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
 
             const SizedBox(height: 20),
 
-            // Cancel Button
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.redAccent,

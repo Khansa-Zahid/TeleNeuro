@@ -34,24 +34,32 @@ dependencies:
   flutter_svg: ^2.0.17
   flutter_lints: ^5.0.0
   shared_preferences: ^2.5.1
-  firebase_auth_web: ^5.13.8
-  cloud_firestore: ^5.6.3
+  firebase_auth_web: ^5.14.1
+  cloud_firestore: ^5.6.5
   provider: ^6.1.2
-  intl: ^0.18.1
+  intl: ^0.20.2
   firebase_messaging: ^15.2.4
-  flutter_local_notifications: ^18.0.1
-
-
-
-
-
+  flutter_local_notifications: ^19.0.0
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   firebase_core: ^3.11.0
-  firebase_auth: ^5.4.2
+  firebase_auth: ^5.5.1
   firebase_storage: ^12.4.2
   firebase_database: ^11.3.2
+
+  zego_uikit_prebuilt_call: ^4.16.24
+  zego_uikit_signaling_plugin: ^2.8.11
+
+  file_picker: ^8.3.7
+  tflite_flutter: ^0.11.0
+  image: ^3.3.0
+  pdf: ^3.8.4
+  share_plus: ^10.1.4
+  shimmer: ^3.0.0
+  package_info_plus: ^8.3.0
+
+
 
 
 dev_dependencies:
@@ -73,7 +81,7 @@ dev_dependencies:
   vector_graphics: ^1.1.18
   vector_graphics_compiler: ^1.1.16
   vm_service: ^14.3.0
-  firebase_messaging: ^15.2.4
+
 
 
 
@@ -94,6 +102,7 @@ flutter:
     - lib/assets/images/community .png
     - lib/assets/images/consult.png
     - lib/assets/images/companion.png
+    - lib/assets/Brain_Tumor_Model.tflite
 
 
   # An image asset can refer to one or more resolution-specific "variants", see

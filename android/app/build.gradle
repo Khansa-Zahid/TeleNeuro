@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "com.example.untitled"  // ✅ Update to your actual package name
-    compileSdk = 34  // ✅ Ensure this matches the latest SDK version
+    compileSdk = 35  // ✅ Ensure this matches the latest SDK version
 
     ndkVersion = flutter.ndkVersion
 
@@ -33,6 +33,8 @@ android {
 
     buildTypes {
         release {
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+
             signingConfig = signingConfigs.debug  // ✅ Replace with actual signing config for production
         }
     }

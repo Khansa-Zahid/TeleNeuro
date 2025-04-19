@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import '../widgets/profile_option_card.dart';
 import 'client_screen.dart';
@@ -12,71 +11,105 @@ class ProfileSelectionScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 80,
-        flexibleSpace: const Center(
-          child: Text(
-            'Profile Selection',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
+        title: const Text(
+          'Profile Selection',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.teal[600],
+        centerTitle: true,
+        backgroundColor: Colors.teal[700],
+        elevation: 4,
       ),
       body: Container(
-        color: Colors.teal[50],
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(20.0),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.teal[50]!, Colors.teal[100]!],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              'Select your preferred profile type to Register',
+              'Select your profile type to register',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.teal[800],
+                fontWeight: FontWeight.w600,
+                color: Colors.teal[900],
               ),
             ),
-            const SizedBox(height: 24),
-            GestureDetector(
-              onTap: () {
-                // Navigate to Client screen
+            const SizedBox(height: 30),
+
+            // Patient Card
+            ElevatedButton(
+              onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) => const ClientScreen(),
-                  ),
+                  MaterialPageRoute(builder: (context) => const ClientScreen()),
                 );
               },
-              child: ProfileOptionCard(
-                icon: Icons.person,
-                title: 'Patient',
-                subtitle: 'Book Appointments',
-                    //'Consult with Doctors.',
-                color: Colors.white,
-                titleColor: Colors.teal[800]!, // Ensure it's non-null
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                elevation: 4,
+                shadowColor: Colors.teal,
+                padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: Colors.teal[200],
+                    radius: 25,
+                    child: const Icon(Icons.person, size: 30, color: Colors.teal),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      'Patient\nBook Appointments',
+                      style: TextStyle(fontSize: 18, color: Colors.teal[900]),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            GestureDetector(
-              onTap: () {
-                // Navigate to Doctor screen without any parameters
+            const SizedBox(height: 20),
+
+            // Doctor Card
+            ElevatedButton(
+              onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) => const DoctorScreen(), // No doctor parameter
-                  ),
+                  MaterialPageRoute(builder: (context) => const DoctorScreen()),
                 );
               },
-              child: ProfileOptionCard(
-                icon: Icons.local_hospital,
-                title: 'Doctor',
-                subtitle: 'Book Appointments',
-                    //' Consult with patients.',
-                color: Colors.white,
-                titleColor: Colors.teal[800]!, // Ensure it's non-null
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                elevation: 4,
+                shadowColor: Colors.teal,
+                padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: Colors.teal[200],
+                    radius: 25,
+                    child: const Icon(Icons.local_hospital, size: 30, color: Colors.teal),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      'Doctor\nManage Patients',
+                      style: TextStyle(fontSize: 18, color: Colors.teal[900]),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'doctor_profile_screen.dart';
 
 class DoctorLoginScreen extends StatefulWidget {
-  const DoctorLoginScreen({Key? key}) : super(key: key);
+  const DoctorLoginScreen({super.key});
 
   @override
   State<DoctorLoginScreen> createState() => _DoctorLoginScreenState();
@@ -17,6 +17,7 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
 
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   Future<void> _login() async {
     setState(() {
@@ -24,7 +25,6 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen> {
     });
 
     try {
-      // 🔹 Step 1: Sign in with Firebase Authentication
       final UserCredential userCredential = await _auth.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
@@ -32,21 +32,21 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen> {
 
       final User? user = userCredential.user;
       if (user != null) {
-        // 🔹 Step 2: Check if the user exists in Firestore's "doctors" collection
         DocumentSnapshot doctorDoc = await _firestore.collection('doctors').doc(user.uid).get();
 
         if (doctorDoc.exists) {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (context) => DoctorProfileScreen(doctorId: user.uid), // ✅ FIXED
+              builder: (context) => DoctorProfileScreen(
+                doctorId: user.uid,
+                //doctorName: user.displayName??'Doctor',
+              ),
             ),
           );
         } else {
-          await _auth.signOut(); // Log them out immediately
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Error: You are not registered as a doctor.')),
-          );
+          await _auth.signOut();
+          _showSnackbar('Error: You are not registered as a doctor.');
         }
       }
     } on FirebaseAuthException catch (e) {
@@ -56,15 +56,18 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen> {
       } else if (e.code == 'wrong-password') {
         message = 'Incorrect password.';
       }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      _showSnackbar(message);
     } finally {
       setState(() {
         _isLoading = false;
       });
     }
+  }
+
+  void _showSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
@@ -73,32 +76,89 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen> {
       appBar: AppBar(
         backgroundColor: Colors.teal[600],
         title: const Text('Doctor Login'),
+        centerTitle: true,
+        elevation: 4,
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: _emailController,
-              decoration: const InputDecoration(labelText: 'Email'),
-              keyboardType: TextInputType.emailAddress,
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _passwordController,
-              decoration: const InputDecoration(labelText: 'Password'),
-              obscureText: true,
-            ),
-            const SizedBox(height: 24),
-            _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : ElevatedButton(
-              onPressed: _login,
-              child: const Text('Login'),
-            ),
-          ],
+        padding: const EdgeInsets.all(20.0),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              CircleAvatar(
+                radius: 50,
+                backgroundColor: Colors.teal[200],
+                child: const Icon(Icons.medical_services, size: 50, color: Colors.teal),
+              ),
+              const SizedBox(height: 20),
+
+              TextField(
+                controller: _emailController,
+                decoration: InputDecoration(
+                  labelText: 'Email',
+                  prefixIcon: const Icon(Icons.email),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                keyboardType: TextInputType.emailAddress,
+              ),
+              const SizedBox(height: 16),
+
+              TextField(
+                controller: _passwordController,
+                obscureText: _obscurePassword,
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  prefixIcon: const Icon(Icons.lock),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _obscurePassword = !_obscurePassword;
+                      });
+                    },
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              TextButton(
+                onPressed: () {
+                  // TODO: Implement password reset
+                },
+                child: const Text(
+                  'Forgot Password?',
+                  style: TextStyle(color: Colors.teal, fontSize: 16),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ElevatedButton(
+                onPressed: _login,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.teal[700],
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 4,
+                ),
+                child: const Text(
+                  'Login',
+                  style: TextStyle(fontSize: 18, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

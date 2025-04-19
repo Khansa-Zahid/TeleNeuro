@@ -17,6 +17,7 @@ class _ClientLoginScreenState extends State<ClientLoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
 
   bool _isLoading = false;
+  bool _obscurePassword = true; // Toggle for password visibility
 
   Future<void> _login() async {
     setState(() {
@@ -24,7 +25,7 @@ class _ClientLoginScreenState extends State<ClientLoginScreen> {
     });
 
     try {
-      // 🔹 Step 1: Sign in with Firebase Authentication
+      // 🔹 Sign in with Firebase Authentication
       final UserCredential userCredential = await _auth.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
@@ -32,7 +33,7 @@ class _ClientLoginScreenState extends State<ClientLoginScreen> {
 
       final User? user = userCredential.user;
       if (user != null) {
-        // 🔹 Step 2: Check if the user exists in Firestore's "clients" collection
+        // 🔹 Check if user exists in Firestore's "clients" collection
         DocumentSnapshot clientDoc =
         await _firestore.collection('clients').doc(user.uid).get();
 
@@ -43,15 +44,13 @@ class _ClientLoginScreenState extends State<ClientLoginScreen> {
             MaterialPageRoute(
               builder: (context) => WelcomeScreen(
                 patientName: clientDoc['name'] ?? 'Patient',
-                patientId: user.uid, // Pass the patientId (user UID)
+                patientId: user.uid,
               ),
             ),
           );
         } else {
           await _auth.signOut(); // Log them out immediately
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Error: You are not registered as a client.')),
-          );
+          _showSnackbar('Error: You are not registered as a client.');
         }
       }
     } on FirebaseAuthException catch (e) {
@@ -61,15 +60,18 @@ class _ClientLoginScreenState extends State<ClientLoginScreen> {
       } else if (e.code == 'wrong-password') {
         message = 'Incorrect password.';
       }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      _showSnackbar(message);
     } finally {
       setState(() {
         _isLoading = false;
       });
     }
+  }
+
+  void _showSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
@@ -78,32 +80,94 @@ class _ClientLoginScreenState extends State<ClientLoginScreen> {
       appBar: AppBar(
         backgroundColor: Colors.teal[600],
         title: const Text('Client Login'),
+        centerTitle: true,
+        elevation: 4,
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: _emailController,
-              decoration: const InputDecoration(labelText: 'Email'),
-              keyboardType: TextInputType.emailAddress,
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _passwordController,
-              decoration: const InputDecoration(labelText: 'Password'),
-              obscureText: true,
-            ),
-            const SizedBox(height: 24),
-            _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : ElevatedButton(
-              onPressed: _login,
-              child: const Text('Login'),
-            ),
-          ],
+        padding: const EdgeInsets.all(20.0),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Icon at the top
+              CircleAvatar(
+                radius: 50,
+                backgroundColor: Colors.teal[200],
+                child: const Icon(Icons.lock, size: 50, color: Colors.teal),
+              ),
+              const SizedBox(height: 20),
+
+              // Email Input Field
+              TextField(
+                controller: _emailController,
+                decoration: InputDecoration(
+                  labelText: 'Email',
+                  prefixIcon: const Icon(Icons.email),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                keyboardType: TextInputType.emailAddress,
+              ),
+              const SizedBox(height: 16),
+
+              // Password Input Field
+              TextField(
+                controller: _passwordController,
+                obscureText: _obscurePassword,
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  prefixIcon: const Icon(Icons.lock),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _obscurePassword = !_obscurePassword;
+                      });
+                    },
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Forgot Password?
+              TextButton(
+                onPressed: () {
+                  // TODO: Implement password reset
+                },
+                child: const Text(
+                  'Forgot Password?',
+                  style: TextStyle(color: Colors.teal, fontSize: 16),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Login Button
+              _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ElevatedButton(
+                onPressed: _login,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.teal[700],
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 4,
+                ),
+                child: const Text(
+                  'Login',
+                  style: TextStyle(fontSize: 18, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

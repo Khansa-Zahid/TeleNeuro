@@ -25,7 +25,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     {
       'image': 'lib/assets/images/companion.png',
       'title': 'Your personalized Healthcare companion',
-      'description': 'Book appointments, Consult with doctors and manage your health journey effortlessly',
+      'description': 'Book appointments.dart, Consult with doctors and manage your health journey effortlessly',
       'showSkip': true,
       'button': null,
       'link': null,
