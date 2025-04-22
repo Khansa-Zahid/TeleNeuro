@@ -6,7 +6,8 @@ class FirebaseAuthServices {
   // Sign up with email and password
   Future<User?> signUp(String email, String password) async {
     try {
-      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+      UserCredential userCredential =
+          await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -34,6 +35,16 @@ class FirebaseAuthServices {
   // Logout
   Future<void> logout() async {
     await _auth.signOut();
+  }
+
+  // Send password reset email
+  Future<void> sendPasswordResetEmail(String email) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+    } catch (e) {
+      print("Error sending password reset email: $e");
+      throw e;
+    }
   }
 
   // Check user authentication status

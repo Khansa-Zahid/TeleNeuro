@@ -10,7 +10,8 @@ class AuthService {
         throw Exception("Email and password must not be empty");
       }
 
-      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+      UserCredential userCredential =
+          await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -62,6 +63,20 @@ class AuthService {
   // Logout
   Future<void> logout() async {
     await _auth.signOut();
+  }
+
+  // Send password reset email
+  Future<void> sendPasswordResetEmail(String email) async {
+    if (email.isEmpty) {
+      throw Exception("Email must not be empty");
+    }
+
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+    } on FirebaseAuthException catch (e) {
+      print("Error sending password reset email: ${e.message}");
+      throw e;
+    }
   }
 
   // Check user authentication status

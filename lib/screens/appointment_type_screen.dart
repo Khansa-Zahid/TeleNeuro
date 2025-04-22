@@ -7,7 +7,7 @@ import 'video_call_screen.dart';
 
 class AppointmentTypeScreen extends StatefulWidget {
   final String patientId;
-  final String patientName; // New parameter added
+  final String patientName;
   final String doctorId;
   final String doctorName;
   final String specialization;
@@ -16,7 +16,7 @@ class AppointmentTypeScreen extends StatefulWidget {
   const AppointmentTypeScreen({
     super.key,
     required this.patientId,
-    required this.patientName, // Required now
+    required this.patientName,
     required this.doctorId,
     required this.doctorName,
     required this.specialization,
@@ -30,16 +30,47 @@ class AppointmentTypeScreen extends StatefulWidget {
 class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
   final ChatService _chatService = ChatService();
   String? chatId;
+  bool hasAcceptedAppointment = false;
+  String? existingAppointmentType;
 
   @override
   void initState() {
     super.initState();
     _initializeChat();
+    _checkExistingAppointments();
+  }
+
+  Future<void> _checkExistingAppointments() async {
+    try {
+      FirebaseFirestore firestore = FirebaseFirestore.instance;
+
+      QuerySnapshot existingAppointments = await firestore
+          .collection("appointments")
+          .where("client_id", isEqualTo: widget.patientId)
+          .where("doctor_id", isEqualTo: widget.doctorId)
+          .where("status", isEqualTo: "accepted")
+          .get();
+
+      if (existingAppointments.docs.isNotEmpty) {
+        // Get the appointment type from the first accepted appointment
+        var appointmentData =
+            existingAppointments.docs.first.data() as Map<String, dynamic>;
+
+        setState(() {
+          hasAcceptedAppointment = true;
+          existingAppointmentType =
+              appointmentData['appointment_type'] as String?;
+        });
+      }
+    } catch (e) {
+      print("Error checking existing appointments: $e");
+    }
   }
 
   Future<void> _initializeChat() async {
     try {
-      String id = await _chatService.getChatId(widget.doctorId, widget.patientId);
+      String id =
+          await _chatService.getChatId(widget.doctorId, widget.patientId);
       if (id.isNotEmpty) {
         setState(() {
           chatId = id;
@@ -49,6 +80,7 @@ class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
       print("Error initializing chat: $e");
     }
   }
+
   void _navigateToChat(String chatId) {
     Navigator.push(
       context,
@@ -66,27 +98,63 @@ class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
     try {
       FirebaseFirestore firestore = FirebaseFirestore.instance;
 
-      DocumentReference appointmentRef = await firestore.collection("appointments").add({
+      // First, check if there's an existing accepted appointment between this patient and doctor
+      QuerySnapshot existingAppointments = await firestore
+          .collection("appointments")
+          .where("client_id", isEqualTo: widget.patientId)
+          .where("doctor_id", isEqualTo: widget.doctorId)
+          .where("status", isEqualTo: "accepted")
+          .get();
+
+      // If there's an existing accepted appointment, go directly to chat or video call
+      if (existingAppointments.docs.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text(
+                  "You already have an accepted appointment with this doctor")),
+        );
+
+        // Go directly to the chat or video call based on appointment type
+        if (appointmentType == "Message") {
+          String chatId =
+              await _chatService.getChatId(widget.doctorId, widget.patientId);
+          if (chatId.isNotEmpty) {
+            _navigateToChat(chatId);
+          }
+        } else if (appointmentType == "Video Call") {
+          _initiateVideoCall();
+        }
+        return;
+      }
+
+      // Create appointment with pending status
+      DocumentReference appointmentRef =
+          await firestore.collection("appointments").add({
         "client_id": widget.patientId,
         "doctor_id": widget.doctorId,
         "status": "pending",
         "date_time": DateTime.now().toIso8601String(),
         "appointment_type": appointmentType,
+        "client_name": widget.patientName,
       });
 
       String appointmentId = appointmentRef.id;
 
+      // Send notification to doctor about pending appointment
       await _storeNotification(
         receiverId: widget.doctorId,
         title: "New Appointment Request",
-        message: "A patient has booked an appointment.",
-        type: "appointment",
+        message:
+            "${widget.patientName} has requested a ${appointmentType} appointment",
+        type: "appointment_request",
+        appointmentId: appointmentId,
       );
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Appointment booked successfully!")),
+        const SnackBar(content: Text("Appointment request sent to doctor")),
       );
 
+      // Navigate to booking confirmation screen to show status
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -101,7 +169,8 @@ class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
     } catch (e) {
       print("Error booking appointment: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Failed to book appointment. Try again.")),
+        const SnackBar(
+            content: Text("Failed to send appointment request. Try again.")),
       );
     }
   }
@@ -111,6 +180,7 @@ class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
     required String title,
     required String message,
     required String type,
+    String? appointmentId,
   }) async {
     try {
       await FirebaseFirestore.instance.collection("notifications").add({
@@ -118,12 +188,26 @@ class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
         "title": title,
         "message": message,
         "type": type,
+        "appointment_id": appointmentId,
+        "sender_id": widget.patientId,
         "timestamp": FieldValue.serverTimestamp(),
         "read": false,
       });
     } catch (e) {
       print("Error storing notification: $e");
     }
+  }
+
+  void _initiateVideoCall() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => VideoCallScreen(
+          doctorId: widget.doctorId,
+          patientId: widget.patientId,
+        ),
+      ),
+    );
   }
 
   Widget _buildAppointmentOption({
@@ -140,7 +224,8 @@ class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
           backgroundColor: Colors.teal[700],
           child: Icon(icon, color: Colors.white),
         ),
-        title: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        title: Text(title,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         subtitle: Text(subtitle),
         trailing: Icon(Icons.arrow_forward_ios, color: Colors.teal[700]),
         onTap: onTap,
@@ -152,7 +237,9 @@ class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Choose Appointment Type"),
+        title: hasAcceptedAppointment
+            ? const Text("Contact Doctor")
+            : const Text("Choose Appointment Type"),
         backgroundColor: Colors.teal[700],
         elevation: 0,
       ),
@@ -161,59 +248,84 @@ class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              "Select how you want to consult with the doctor:",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
-              textAlign: TextAlign.center,
-            ),
+            if (hasAcceptedAppointment)
+              // Show message and options for already accepted appointments
+              Column(children: [
+                const Text(
+                  "You already have an accepted appointment with this doctor.",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                if (existingAppointmentType == "Video Call" ||
+                    existingAppointmentType == null)
+                  _buildAppointmentOption(
+                    title: "Video Call",
+                    subtitle: "Have a face-to-face consultation.",
+                    icon: Icons.video_call,
+                    onTap: _initiateVideoCall,
+                  ),
+                const SizedBox(height: 12),
+                if (existingAppointmentType == "Message" ||
+                    existingAppointmentType == null)
+                  _buildAppointmentOption(
+                    title: "Message",
+                    subtitle: "Chat with the doctor for quick queries.",
+                    icon: Icons.chat_bubble_outline,
+                    onTap: () async {
+                      if (chatId != null && chatId!.isNotEmpty) {
+                        _navigateToChat(chatId!);
+                      } else {
+                        String id = await _chatService.getChatId(
+                            widget.doctorId, widget.patientId);
+                        if (id.isNotEmpty) {
+                          _navigateToChat(id);
+                        }
+                      }
+                    },
+                  ),
+              ])
+            else
+              // Show options for new appointment requests
+              Column(
+                children: [
+                  const Text(
+                    "Select how you want to consult with the doctor:",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  _buildAppointmentOption(
+                    title: "Video Call",
+                    subtitle: "Have a face-to-face consultation.",
+                    icon: Icons.video_call,
+                    onTap: () => _bookAppointment("Video Call"),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildAppointmentOption(
+                    title: "Message",
+                    subtitle: "Chat with the doctor for quick queries.",
+                    icon: Icons.chat_bubble_outline,
+                    onTap: () => _bookAppointment("Message"),
+                  ),
+                ],
+              ),
             const SizedBox(height: 20),
-
-            _buildAppointmentOption(
-              title: "Video Call",
-              subtitle: "Have a face-to-face consultation.",
-              icon: Icons.video_call,
-              onTap: () => _bookAppointment("Video Call"),
-            ),
-
-            const SizedBox(height: 12),
-
-            _buildAppointmentOption(
-              title: "Message",
-              subtitle: "Chat with the doctor for quick queries.",
-              icon: Icons.chat_bubble_outline,
-              onTap: () async {
-                if (chatId == null || chatId!.isEmpty) {
-                  try {
-                    String id = await _chatService.getChatId(widget.doctorId, widget.patientId);
-                    setState(() {
-                      chatId = id;
-                    });
-                    _navigateToChat(id);
-                  } catch (e) {
-                    print("Error fetching chat ID: $e");
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Failed to start chat. Please try again.")),
-                    );
-                  }
-                } else {
-                  _navigateToChat(chatId!);
-                }
-              },
-            ),
-
-            const SizedBox(height: 20),
-
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.redAccent,
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
               ),
               onPressed: () => Navigator.pop(context),
               icon: const Icon(Icons.cancel, color: Colors.white),
               label: const Text(
                 "Cancel",
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold),
               ),
             ),
           ],

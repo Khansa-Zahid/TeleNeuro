@@ -7,7 +7,7 @@ import 'patient_prescription_screen.dart';
 import 'appointment_status_screen.dart';
 import 'patient_profile_completion_screen.dart';
 import 'patient_profile_display_screen.dart';
-
+import 'brain_tumor_detector.dart';
 
 class WelcomeScreen extends StatefulWidget {
   final String patientName;
@@ -39,7 +39,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     _fetchUnreadNotifications();
   }
 
-
   @override
   void dispose() {
     _timer.cancel();
@@ -57,19 +56,17 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   String _formatTime() {
     final now = DateTime.now();
-    return '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString()
-        .padLeft(2, '0')}';
+    return '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
   }
 
   void _fetchUnreadNotifications() {
     FirebaseFirestore.instance
         .collection('notifications')
         .where('client_id', isEqualTo: widget.patientId)
-        .where('status', isEqualTo: 'unread')  // Use string literal
-    // .where('title', whereIn: ['New Appointment Request', 'Appointment Update'])
-    // .get();
+        .where('status', isEqualTo: 'unread') // Use string literal
+        // .where('title', whereIn: ['New Appointment Request', 'Appointment Update'])
+        // .get();
         .snapshots()
-
         .listen((snapshot) {
       print("Fetched Notifications: ${snapshot.docs.length}");
       for (var doc in snapshot.docs) {
@@ -88,8 +85,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     });
   }
 
-
-
   void _toggleDropdown() {
     if (mounted) {
       setState(() {
@@ -98,7 +93,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     }
   }
 
-
   void _markAsRead(String notificationId) {
     FirebaseFirestore.instance
         .collection('notifications')
@@ -106,15 +100,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         .update({'status': 'read'});
   }
 
-
   void _logout(BuildContext context) {
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (context) => const ProfileSelectionScreen()),
-          (Route<dynamic> route) => false,
+      (Route<dynamic> route) => false,
     );
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -132,13 +124,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             clipBehavior: Clip.none, // Allows positioning outside Stack
             children: [
               IconButton(
-                icon: const Icon(Icons.notifications, size: 30, color: Colors.white),
+                icon: const Icon(Icons.notifications,
+                    size: 30, color: Colors.white),
                 onPressed: _toggleDropdown,
               ),
               if (unreadNotifications > 0)
                 Positioned(
-                  right: 6,  // Adjust left/right
-                  top: 6,    // Move above the bell icon
+                  right: 6, // Adjust left/right
+                  top: 6, // Move above the bell icon
                   child: CircleAvatar(
                     backgroundColor: Colors.red,
                     radius: 10,
@@ -151,10 +144,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             ],
           ),
         ],
-
       ),
-
-
       drawer: Drawer(
         child: Column(
           children: [
@@ -162,8 +152,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               decoration: BoxDecoration(color: Colors.teal.shade400),
               accountName: Text(
                 widget.patientName,
-                style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.bold),
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               accountEmail: const Text(
                 "Patient",
@@ -174,12 +164,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 child: Icon(Icons.person, size: 40, color: Colors.teal),
               ),
             ),
-            _drawerItem(Icons.person, "Edit Profile", () {Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => PatientProfileCompletionScreen(patientId: widget.patientId),
-              ),
-            );}),
+            _drawerItem(Icons.person, "Edit Profile", () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => PatientProfileCompletionScreen(
+                      patientId: widget.patientId),
+                ),
+              );
+            }),
             //  _drawerItem(Icons.notifications, "Notifications", () {}),
             _drawerItem(Icons.medical_services, "Find a Doctor", () {
               Navigator.push(
@@ -194,8 +187,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           ],
         ),
       ),
-
-
       body: Stack(
         children: [
           SafeArea(
@@ -211,59 +202,65 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       crossAxisSpacing: 15,
                       mainAxisSpacing: 15,
                       children: [
-                        _dashboardCard(Icons.history, "Request History", Colors.orange),
                         _dashboardCard(
-                            Icons.dashboard,
-                            "Patient Profile Display",
-                            Colors.blue,
-                                () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => PatientProfileDisplayScreen(patientId: widget.patientId),
-                                ),
-                              );
-                            }
-                        ),
-                        _dashboardCard(
-                            Icons.account_circle,
-                            "Patient Profile",
-                            Colors.blue,
-                                () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => PatientProfileCompletionScreen(patientId: widget.patientId),
-                                ),
-                              );
-                            }
-                        ),
-
+                            Icons.history, "Request History", Colors.orange),
+                        _dashboardCard(Icons.dashboard,
+                            "Patient Profile Display", Colors.blue, () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => PatientProfileDisplayScreen(
+                                  patientId: widget.patientId),
+                            ),
+                          );
+                        }),
+                        _dashboardCard(Icons.account_circle, "Patient Profile",
+                            Colors.blue, () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  PatientProfileCompletionScreen(
+                                      patientId: widget.patientId),
+                            ),
+                          );
+                        }),
                         _dashboardCard(Icons.local_hospital, "Consult a Doctor",
                             Colors.green, () {
-                              Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (context) => FindDoctorScreen(
-                                          patientId: widget.patientId)));
-                            }),
-                        _dashboardCard(Icons.medical_information, "Reports",
-                            Colors.purple, () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => PatientPrescriptionScreen(
-                                      patientId: widget.patientId),
-                                ),
-                              );
-                            }),
+                          Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => FindDoctorScreen(
+                                      patientId: widget.patientId)));
+                        }),
                         _dashboardCard(
-                            Icons.event_note, "My Appointments", Colors.red, () {
+                            Icons.medical_information, "Reports", Colors.purple,
+                            () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => PatientPrescriptionScreen(
+                                  patientId: widget.patientId),
+                            ),
+                          );
+                        }),
+                        _dashboardCard(
+                            Icons.event_note, "My Appointments", Colors.red,
+                            () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (context) => AppointmentStatusScreen(
                                   clientId: widget.patientId),
+                            ),
+                          );
+                        }),
+                        _dashboardCard(Icons.medical_services, "AI Diagnose",
+                            Colors.deepPurple, () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => BrainTumorDetector(),
                             ),
                           );
                         }),
@@ -294,20 +291,21 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: notifications.isNotEmpty
                         ? notifications.map((notif) {
-                      return ListTile(
-                        title: Text(notif['title'], style: const TextStyle(
-                            fontWeight: FontWeight.bold)),
-                        subtitle: Text(notif['message'] ?? ''),
-                        onTap: () {
-                          _markAsRead(notif['id']);
-                          _toggleDropdown();
-                        },
-                      );
-                    }).toList()
+                            return ListTile(
+                              title: Text(notif['title'],
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold)),
+                              subtitle: Text(notif['message'] ?? ''),
+                              onTap: () {
+                                _markAsRead(notif['id']);
+                                _toggleDropdown();
+                              },
+                            );
+                          }).toList()
                         : [
-                      const Text("No new notifications",
-                          style: TextStyle(color: Colors.grey))
-                    ],
+                            const Text("No new notifications",
+                                style: TextStyle(color: Colors.grey))
+                          ],
                   ),
                 ),
               ),
@@ -316,8 +314,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       ),
     );
   }
-
-
 
   Widget _drawerItem(IconData icon, String title, VoidCallback onTap) {
     return ListTile(
@@ -343,7 +339,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(10),
           ),
-          child: SingleChildScrollView( // 🔥 Scrollable content prevents overflow
+          child: SingleChildScrollView(
+            // 🔥 Scrollable content prevents overflow
             child: Column(
               mainAxisSize: MainAxisSize.min, // Avoids unnecessary space
               children: notifications.map((notification) {
@@ -364,8 +361,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     );
   }
 
-
-
   Widget _buildWelcomeCard() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
@@ -374,7 +369,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             colors: [Colors.teal.shade400, Colors.teal.shade200]),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
-          BoxShadow(color: Colors.grey.withOpacity(0.3),
+          BoxShadow(
+              color: Colors.grey.withOpacity(0.3),
               blurRadius: 8,
               spreadRadius: 2)
         ],
@@ -387,8 +383,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
           ),
           const SizedBox(height: 5),
-          Text(_time, style: TextStyle(
-              fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+          Text(_time,
+              style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white)),
         ],
       ),
     );
@@ -429,4 +428,3 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     );
   }
 }
-

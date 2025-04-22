@@ -26,7 +26,8 @@ class _ClientLoginScreenState extends State<ClientLoginScreen> {
 
     try {
       // 🔹 Sign in with Firebase Authentication
-      final UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+      final UserCredential userCredential =
+          await _auth.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
@@ -35,7 +36,7 @@ class _ClientLoginScreenState extends State<ClientLoginScreen> {
       if (user != null) {
         // 🔹 Check if user exists in Firestore's "clients" collection
         DocumentSnapshot clientDoc =
-        await _firestore.collection('clients').doc(user.uid).get();
+            await _firestore.collection('clients').doc(user.uid).get();
 
         if (clientDoc.exists) {
           // ✅ User exists in Firestore -> Navigate to Welcome Screen
@@ -71,6 +72,82 @@ class _ClientLoginScreenState extends State<ClientLoginScreen> {
   void _showSnackbar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<void> _forgotPassword() async {
+    // Show a dialog to get the user's email
+    final TextEditingController emailController = TextEditingController();
+    emailController.text =
+        _emailController.text; // Pre-fill with current email if available
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset Password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Enter your email address and we\'ll send you a link to reset your password.',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: emailController,
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                hintText: 'Enter your email',
+              ),
+              keyboardType: TextInputType.emailAddress,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+
+              if (emailController.text.trim().isEmpty) {
+                _showSnackbar('Please enter your email address');
+                return;
+              }
+
+              try {
+                setState(() {
+                  _isLoading = true;
+                });
+
+                await _auth.sendPasswordResetEmail(
+                  email: emailController.text.trim(),
+                );
+
+                _showSnackbar('Password reset link sent to your email');
+              } on FirebaseAuthException catch (e) {
+                String message = 'Failed to send password reset email';
+                if (e.code == 'user-not-found') {
+                  message = 'No user found with this email address';
+                } else if (e.code == 'invalid-email') {
+                  message = 'Invalid email address';
+                }
+                _showSnackbar(message);
+              } finally {
+                setState(() {
+                  _isLoading = false;
+                });
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal[700],
+            ),
+            child: const Text('Send Reset Link'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -121,7 +198,9 @@ class _ClientLoginScreenState extends State<ClientLoginScreen> {
                   prefixIcon: const Icon(Icons.lock),
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                      _obscurePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
                     ),
                     onPressed: () {
                       setState(() {
@@ -138,9 +217,7 @@ class _ClientLoginScreenState extends State<ClientLoginScreen> {
 
               // Forgot Password?
               TextButton(
-                onPressed: () {
-                  // TODO: Implement password reset
-                },
+                onPressed: _forgotPassword,
                 child: const Text(
                   'Forgot Password?',
                   style: TextStyle(color: Colors.teal, fontSize: 16),
@@ -152,20 +229,20 @@ class _ClientLoginScreenState extends State<ClientLoginScreen> {
               _isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : ElevatedButton(
-                onPressed: _login,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.teal[700],
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 4,
-                ),
-                child: const Text(
-                  'Login',
-                  style: TextStyle(fontSize: 18, color: Colors.white),
-                ),
-              ),
+                      onPressed: _login,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.teal[700],
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 4,
+                      ),
+                      child: const Text(
+                        'Login',
+                        style: TextStyle(fontSize: 18, color: Colors.white),
+                      ),
+                    ),
             ],
           ),
         ),
