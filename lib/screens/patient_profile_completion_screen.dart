@@ -11,10 +11,12 @@ class PatientProfileCompletionScreen extends StatefulWidget {
   const PatientProfileCompletionScreen({super.key, required this.patientId});
 
   @override
-  _PatientProfileCompletionScreenState createState() => _PatientProfileCompletionScreenState();
+  _PatientProfileCompletionScreenState createState() =>
+      _PatientProfileCompletionScreenState();
 }
 
-class _PatientProfileCompletionScreenState extends State<PatientProfileCompletionScreen> {
+class _PatientProfileCompletionScreenState
+    extends State<PatientProfileCompletionScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _dobController = TextEditingController();
@@ -22,15 +24,20 @@ class _PatientProfileCompletionScreenState extends State<PatientProfileCompletio
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _homeAddressController = TextEditingController();
   final TextEditingController _bloodGroupController = TextEditingController();
-  final TextEditingController _medicalConditionsController = TextEditingController();
+  final TextEditingController _medicalConditionsController =
+      TextEditingController();
   final TextEditingController _allergiesController = TextEditingController();
   final TextEditingController _medicationsController = TextEditingController();
-  final TextEditingController _emergencyContactController = TextEditingController();
-  final TextEditingController _insuranceDetailsController = TextEditingController();
+  final TextEditingController _emergencyContactController =
+      TextEditingController();
+  final TextEditingController _insuranceDetailsController =
+      TextEditingController();
   File? _profileImage;
   File? _medicalReport;
   String? _selectedGender;
   bool isLoading = false;
+  bool _isLoadingData = true;
+  String? _existingProfileImageUrl;
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -40,6 +47,7 @@ class _PatientProfileCompletionScreenState extends State<PatientProfileCompletio
   void initState() {
     super.initState();
     _checkUserAuthentication();
+    _fetchExistingPatientData();
   }
 
   void _checkUserAuthentication() {
@@ -50,8 +58,46 @@ class _PatientProfileCompletionScreenState extends State<PatientProfileCompletio
     }
   }
 
+  Future<void> _fetchExistingPatientData() async {
+    setState(() => _isLoadingData = true);
+
+    try {
+      // Check both collections where patient data might be stored
+      DocumentSnapshot clientDoc =
+          await _firestore.collection('clients').doc(widget.patientId).get();
+
+      if (clientDoc.exists) {
+        Map<String, dynamic> data =
+            clientDoc.data() as Map<String, dynamic>? ?? {};
+
+        _nameController.text = data['fullName'] ?? data['name'] ?? '';
+        _dobController.text = data['dob'] ?? '';
+        _selectedGender = data['gender'];
+        _phoneController.text = data['phoneNumber'] ?? data['phone'] ?? '';
+        _emailController.text = data['email'] ?? '';
+        _homeAddressController.text = data['address'] ?? '';
+        _bloodGroupController.text = data['bloodGroup'] ?? '';
+        _medicalConditionsController.text = data['medicalConditions'] ?? '';
+        _allergiesController.text = data['allergies'] ?? '';
+        _medicationsController.text = data['medications'] ?? '';
+        _emergencyContactController.text = data['emergencyContact'] ?? '';
+        _insuranceDetailsController.text =
+            data['insuranceDetails'] ?? data['insurance'] ?? '';
+        _existingProfileImageUrl =
+            data['profileImageUrl'] ?? data['profileImage'];
+      }
+    } catch (e) {
+      print("Error fetching patient data: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Could not load existing profile data")));
+    }
+
+    setState(() => _isLoadingData = false);
+  }
+
   Future<void> _pickImage() async {
-    final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
+    final pickedFile =
+        await ImagePicker().pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
       setState(() {
         _profileImage = File(pickedFile.path);
@@ -60,7 +106,8 @@ class _PatientProfileCompletionScreenState extends State<PatientProfileCompletio
   }
 
   Future<void> _pickMedicalReport() async {
-    final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
+    final pickedFile =
+        await ImagePicker().pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
       setState(() {
         _medicalReport = File(pickedFile.path);
@@ -88,44 +135,71 @@ class _PatientProfileCompletionScreenState extends State<PatientProfileCompletio
     setState(() => isLoading = true);
 
     try {
-      String? profileImageUrl;
+      String? profileImageUrl = _existingProfileImageUrl;
       String? medicalReportUrl;
 
       // Upload profile image if selected
       if (_profileImage != null) {
-        profileImageUrl = await _uploadFile(_profileImage!, 'profile_images/${widget.patientId}.jpg');
+        profileImageUrl = await _uploadFile(
+            _profileImage!, 'profile_images/${widget.patientId}.jpg');
       }
 
       // Upload medical report if selected
       if (_medicalReport != null) {
-        medicalReportUrl = await _uploadFile(_medicalReport!, 'medical_reports/${widget.patientId}.pdf');
+        medicalReportUrl = await _uploadFile(
+            _medicalReport!, 'medical_reports/${widget.patientId}.pdf');
       }
 
-      await _firestore.collection('patients').doc(widget.patientId).set({
-        'fullName': _nameController.text,
-        'dob': _dobController.text,
+      // Create a data map with all the patient information
+      Map<String, dynamic> patientData = {
+        'fullName': _nameController.text.trim(),
+        'name': _nameController.text
+            .trim(), // For compatibility with both field names
+        'dob': _dobController.text.trim(),
         'gender': _selectedGender,
-        'phoneNumber': _phoneController.text,
-        'email': _emailController.text,
-        'address': _homeAddressController.text,
-        'bloodGroup': _bloodGroupController.text,
-        'medicalConditions': _medicalConditionsController.text,
-        'allergies': _allergiesController.text,
-        'medications': _medicationsController.text,
-        'emergencyContact': _emergencyContactController.text,
-        'insuranceDetails': _insuranceDetailsController.text,
-        'profileImageUrl': profileImageUrl,
-        'medicalReportUrl': medicalReportUrl,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
+        'phoneNumber': _phoneController.text.trim(),
+        'phone': _phoneController.text
+            .trim(), // For compatibility with both field names
+        'email': _emailController.text.trim(),
+        'address': _homeAddressController.text.trim(),
+        'bloodGroup': _bloodGroupController.text.trim(),
+        'medicalConditions': _medicalConditionsController.text.trim(),
+        'allergies': _allergiesController.text.trim(),
+        'medications': _medicationsController.text.trim(),
+        'emergencyContact': _emergencyContactController.text.trim(),
+        'insuranceDetails': _insuranceDetailsController.text.trim(),
+        'insurance': _insuranceDetailsController.text
+            .trim(), // For compatibility with both field names
+        'lastUpdated': FieldValue.serverTimestamp(),
+      };
+
+      // Only add image URLs if they exist
+      if (profileImageUrl != null) {
+        patientData['profileImageUrl'] = profileImageUrl;
+        patientData['profileImage'] =
+            profileImageUrl; // For compatibility with both field names
+      }
+
+      if (medicalReportUrl != null) {
+        patientData['medicalReportUrl'] = medicalReportUrl;
+      }
+
+      // Save to 'clients' collection to ensure consistency
+      await _firestore.collection('clients').doc(widget.patientId).set(
+            patientData,
+            SetOptions(
+                merge:
+                    true), // Use merge to keep existing data not updated here
+          );
 
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Profile saved successfully!"))
-      );
+          const SnackBar(content: Text("Profile saved successfully!")));
+
+      // Go back to previous screen after saving
+      Navigator.pop(context);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: ${e.toString()}"))
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Error: ${e.toString()}")));
     }
 
     setState(() => isLoading = false);
@@ -137,117 +211,181 @@ class _PatientProfileCompletionScreenState extends State<PatientProfileCompletio
     return await snapshot.ref.getDownloadURL();
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Complete Your Profile'),
+        title: const Text('Complete Your Profile'),
         backgroundColor: Colors.teal,
       ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(20),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: GestureDetector(
-                  onTap: _pickImage,
-                  child: CircleAvatar(
-                    radius: 60,
-                    backgroundImage: _profileImage != null ? FileImage(_profileImage!) : null,
-                    child: _profileImage == null ? Icon(Icons.camera_alt, size: 50, color: Colors.white) : null,
-                    backgroundColor: Colors.teal.shade200,
-                  ),
+      body: _isLoadingData
+          ? const Center(child: CircularProgressIndicator(color: Colors.teal))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: GestureDetector(
+                        onTap: _pickImage,
+                        child: CircleAvatar(
+                          radius: 60,
+                          backgroundImage: _profileImage != null
+                              ? FileImage(_profileImage!)
+                              : _existingProfileImageUrl != null
+                                  ? NetworkImage(_existingProfileImageUrl!)
+                                      as ImageProvider
+                                  : null,
+                          child: (_profileImage == null &&
+                                  _existingProfileImageUrl == null)
+                              ? const Icon(Icons.camera_alt,
+                                  size: 50, color: Colors.white)
+                              : null,
+                          backgroundColor: Colors.teal.shade200,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildTextField(_nameController, 'Full Name', Icons.person,
+                        required: true),
+                    _buildDateField(required: true),
+                    _buildDropdownField(required: true),
+                    _buildTextField(
+                        _phoneController, 'Phone Number', Icons.phone,
+                        required: true),
+                    _buildTextField(
+                        _emailController, 'Email Address', Icons.email,
+                        required: true),
+                    _buildTextField(
+                        _homeAddressController, 'Home Address', Icons.home),
+                    _buildTextField(
+                        _bloodGroupController, 'Blood Group', Icons.bloodtype,
+                        required: true),
+                    _buildTextField(_medicalConditionsController,
+                        'Existing Medical Conditions', Icons.local_hospital),
+                    _buildTextField(_allergiesController,
+                        'Allergies (Any drug/food allergies)', Icons.warning),
+                    _buildTextField(_medicationsController,
+                        'Current Medications', Icons.medication),
+                    _buildTextField(_emergencyContactController,
+                        'Emergency Contact Name & Phone', Icons.contact_phone,
+                        required: true),
+                    _buildTextField(
+                        _insuranceDetailsController,
+                        'Health Insurance Details (if applicable)',
+                        Icons.security),
+                    const SizedBox(height: 20),
+                    const Text(
+                        'Medical History (Optional: Upload Medical Reports)',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 10),
+                    ElevatedButton.icon(
+                      onPressed: _pickMedicalReport,
+                      icon: const Icon(Icons.upload_file),
+                      label: Text(_medicalReport != null
+                          ? 'Medical Report Selected'
+                          : 'Upload Medical Report'),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.teal),
+                    ),
+                    const SizedBox(height: 20),
+                    Center(
+                      child: ElevatedButton(
+                        onPressed: !isLoading ? _saveProfile : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.teal,
+                          minimumSize: const Size(200, 50),
+                        ),
+                        child: isLoading
+                            ? const CircularProgressIndicator(
+                                color: Colors.white)
+                            : const Text('Save Profile',
+                                style: TextStyle(fontSize: 16)),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              SizedBox(height: 20),
-              _buildTextField(_nameController, 'Full Name', Icons.person),
-              _buildDateField(),
-              _buildDropdownField(),
-              _buildTextField(_phoneController, 'Phone Number', Icons.phone),
-              _buildTextField(_emailController, 'Email Address', Icons.email),
-              _buildTextField(_homeAddressController, 'Home Address', Icons.home),
-              _buildTextField(_bloodGroupController, 'Blood Group', Icons.bloodtype),
-              _buildTextField(_medicalConditionsController, 'Existing Medical Conditions', Icons.local_hospital),
-              _buildTextField(_allergiesController, 'Allergies (Any drug/food allergies)', Icons.warning),
-              _buildTextField(_medicationsController, 'Current Medications', Icons.medication),
-              _buildTextField(_emergencyContactController, 'Emergency Contact Name & Phone', Icons.contact_phone),
-              _buildTextField(_insuranceDetailsController, 'Health Insurance Details (if applicable)', Icons.security),
-              SizedBox(height: 20),
-              Text('Medical History (Optional: Upload Medical Reports)', style: TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(height: 10),
-              ElevatedButton.icon(
-                onPressed: _pickMedicalReport,
-                icon: Icon(Icons.upload_file),
-                label: Text('Upload Medical Report'),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
-              ),
-              SizedBox(height: 20),
-              Center(
-                child: ElevatedButton(
-                  onPressed: _saveProfile,
-                  child: isLoading
-                      ? CircularProgressIndicator(color: Colors.white)
-                      : Text('Save Profile'),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+            ),
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String label, IconData icon) {
+  Widget _buildTextField(
+      TextEditingController controller, String label, IconData icon,
+      {bool required = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: TextFormField(
         controller: controller,
         decoration: InputDecoration(
-          labelText: label,
+          labelText: required ? '$label *' : label,
           prefixIcon: Icon(icon),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         ),
+        validator: required
+            ? (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please enter $label';
+                }
+                return null;
+              }
+            : null,
       ),
     );
   }
 
-  Widget _buildDateField() {
+  Widget _buildDateField({bool required = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: TextFormField(
         controller: _dobController,
         decoration: InputDecoration(
-          labelText: 'Date of Birth',
-          prefixIcon: Icon(Icons.calendar_today),
+          labelText: required ? 'Date of Birth *' : 'Date of Birth',
+          prefixIcon: const Icon(Icons.calendar_today),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         ),
         readOnly: true,
         onTap: _pickDate,
+        validator: required
+            ? (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please select your date of birth';
+                }
+                return null;
+              }
+            : null,
       ),
     );
   }
 
-  Widget _buildDropdownField() {
+  Widget _buildDropdownField({bool required = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: DropdownButtonFormField<String>(
         value: _selectedGender,
         decoration: InputDecoration(
-          labelText: 'Gender',
-          prefixIcon: Icon(Icons.wc),
+          labelText: required ? 'Gender *' : 'Gender',
+          prefixIcon: const Icon(Icons.wc),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         ),
         items: ['Male', 'Female', 'Other'].map((String value) {
           return DropdownMenuItem<String>(value: value, child: Text(value));
         }).toList(),
         onChanged: (String? newValue) {
-          setState(() { _selectedGender = newValue; });
+          setState(() {
+            _selectedGender = newValue;
+          });
         },
+        validator: required
+            ? (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please select your gender';
+                }
+                return null;
+              }
+            : null,
       ),
     );
   }

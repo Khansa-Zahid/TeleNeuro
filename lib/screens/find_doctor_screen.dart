@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'appointment_type_screen.dart';
+import 'doctor_profile_view_screen.dart';
 
 class FindDoctorScreen extends StatefulWidget {
   final String patientId;
@@ -17,7 +18,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
   Future<List<Map<String, String>>> _fetchDoctors() async {
     try {
       QuerySnapshot querySnapshot =
-      await _firestore.collection('doctors').get();
+          await _firestore.collection('doctors').get();
 
       if (querySnapshot.docs.isEmpty) {
         debugPrint('No doctors found in Firestore.');
@@ -30,7 +31,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
           'doctorId': doc.id,
           'name': data['name']?.toString() ?? 'Unknown',
           'specialization':
-          data['specialization']?.toString() ?? 'Not specified',
+              data['specialization']?.toString() ?? 'Not specified',
           'email': data['email']?.toString() ?? 'No email',
           'phoneNumber': data['phoneNumber']?.toString() ?? 'No phone',
         };
@@ -117,130 +118,172 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Row(
+        child: Column(
           children: [
-            // Doctor Avatar with Initials
-            CircleAvatar(
-              radius: 30,
-              backgroundColor: Colors.teal.shade300,
-              child: Text(
-                doctor['name']!.isNotEmpty
-                    ? doctor['name']![0].toUpperCase()
-                    : '?',
-                style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white),
-              ),
-            ),
-            const SizedBox(width: 15),
-
-            // Doctor Details
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    doctor['name']!,
+            Row(
+              children: [
+                // Doctor Avatar with Initials
+                CircleAvatar(
+                  radius: 30,
+                  backgroundColor: Colors.teal.shade300,
+                  child: Text(
+                    doctor['name']!.isNotEmpty
+                        ? doctor['name']![0].toUpperCase()
+                        : '?',
                     style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold),
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white),
                   ),
-                  const SizedBox(height: 5),
-                  Text(
-                    "Specialization: ${doctor['specialization']!}",
-                    style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
-                  ),
-                  if (doctor['email'] != null && doctor['email']!.isNotEmpty)
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.email,
-                          size: 16,
-                          color: Colors.teal,
-                        ),
-                        const SizedBox(width: 4), // Spacing between icon and text
-                        Flexible(
-                          child: Text(
-                            doctor['email']!,
-                            style: TextStyle(
-                                fontSize: 14, color: Colors.grey.shade600),
-                            overflow: TextOverflow.ellipsis, // Handle overflow
-                          ),
-                        ),
-                      ],
-                    ),
-                  Row(
+                ),
+                const SizedBox(width: 15),
+
+                // Doctor Details
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        Icons.phone,
-                        size: 16,
-                        color: Colors.teal,
+                      Text(
+                        doctor['name']!,
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
-                      const SizedBox(width: 4), // Spacing between icon and text
-                      Flexible(
-                        child: Text(
-                          doctor['phoneNumber']!,
-                          style: TextStyle(
-                              fontSize: 14, color: Colors.grey.shade600),
-                          overflow: TextOverflow.ellipsis, // Handle overflow
+                      const SizedBox(height: 5),
+                      Text(
+                        "Specialization: ${doctor['specialization']!}",
+                        style: TextStyle(
+                            fontSize: 14, color: Colors.grey.shade700),
+                      ),
+                      if (doctor['email'] != null &&
+                          doctor['email']!.isNotEmpty)
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.email,
+                              size: 16,
+                              color: Colors.teal,
+                            ),
+                            const SizedBox(
+                                width: 4), // Spacing between icon and text
+                            Flexible(
+                              child: Text(
+                                doctor['email']!,
+                                style: TextStyle(
+                                    fontSize: 14, color: Colors.grey.shade600),
+                                overflow:
+                                    TextOverflow.ellipsis, // Handle overflow
+                              ),
+                            ),
+                          ],
                         ),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.phone,
+                            size: 16,
+                            color: Colors.teal,
+                          ),
+                          const SizedBox(
+                              width: 4), // Spacing between icon and text
+                          Flexible(
+                            child: Text(
+                              doctor['phoneNumber']!,
+                              style: TextStyle(
+                                  fontSize: 14, color: Colors.grey.shade600),
+                              overflow:
+                                  TextOverflow.ellipsis, // Handle overflow
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
 
-            // Book Appointment Button
-            ElevatedButton(
-              onPressed: () async {
-                try {
-                  DocumentSnapshot patientSnapshot = await _firestore
-                      .collection('patients')
-                      .doc(widget.patientId)
-                      .get();
+            const SizedBox(height: 12),
 
-                  if (patientSnapshot.exists) {
-                    final patientData = patientSnapshot.data() as Map<String, dynamic>;
-                    final patientName = patientData['name'] ?? 'Unknown Patient';
-
+            // Action Buttons
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                // View Profile Button
+                OutlinedButton.icon(
+                  onPressed: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => AppointmentTypeScreen(
+                        builder: (context) => DoctorProfileViewScreen(
                           doctorId: doctor['doctorId']!,
-                          doctorName: doctor['name']!,
-                          specialization: doctor['specialization']!,
-                          patientId: widget.patientId,
-                          patientName: patientName,
-                          channelName: widget.patientId,
                         ),
                       ),
                     );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Patient not found in database")),
-                    );
-                  }
-                } catch (e) {
-                  print("Error fetching patient data: $e");
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("Error: $e")),
-                  );
-                }
-              },
+                  },
+                  icon: const Icon(Icons.person, size: 16),
+                  label: const Text("View Profile"),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.teal.shade700,
+                    side: BorderSide(color: Colors.teal.shade300),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
+                const SizedBox(width: 8),
 
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.teal.shade400,
-                padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-              ),
-              child: const Text("Book",
-                  style: TextStyle(fontSize: 14, color: Colors.white)),
+                // Book Appointment Button
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    try {
+                      DocumentSnapshot patientSnapshot = await _firestore
+                          .collection('clients')
+                          .doc(widget.patientId)
+                          .get();
+
+                      if (patientSnapshot.exists) {
+                        final patientData =
+                            patientSnapshot.data() as Map<String, dynamic>;
+                        final patientName =
+                            patientData['name'] ?? 'Unknown Patient';
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => AppointmentTypeScreen(
+                              doctorId: doctor['doctorId']!,
+                              doctorName: doctor['name']!,
+                              specialization: doctor['specialization']!,
+                              patientId: widget.patientId,
+                              patientName: patientName,
+                              channelName: widget.patientId,
+                            ),
+                          ),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text("Patient not found in database")),
+                        );
+                      }
+                    } catch (e) {
+                      print("Error fetching patient data: $e");
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text("Error: $e")),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.calendar_today, size: 16),
+                  label: const Text("Book Appointment"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.teal.shade500,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

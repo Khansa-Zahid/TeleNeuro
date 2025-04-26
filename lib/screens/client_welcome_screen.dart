@@ -202,8 +202,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       crossAxisSpacing: 15,
                       mainAxisSpacing: 15,
                       children: [
-                        _dashboardCard(
-                            Icons.history, "Request History", Colors.orange),
+                        // _dashboardCard(
+                        //     Icons.history, "Request History", Colors.orange),
                         _dashboardCard(Icons.dashboard,
                             "Patient Profile Display", Colors.blue, () {
                           Navigator.push(
@@ -260,7 +260,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => BrainTumorDetector(),
+                              builder: (context) => BrainTumorDetector(
+                                  patientId: widget.patientId),
                             ),
                           );
                         }),
