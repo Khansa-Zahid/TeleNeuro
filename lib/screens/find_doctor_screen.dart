@@ -220,6 +220,9 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                         builder: (context) => DoctorProfileViewScreen(
                           doctorId: doctor['doctorId']!,
                         ),
+                        settings: RouteSettings(
+                          arguments: {'patientId': widget.patientId},
+                        ),
                       ),
                     );
                   },

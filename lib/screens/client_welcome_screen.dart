@@ -8,6 +8,7 @@ import 'appointment_status_screen.dart';
 import 'patient_profile_completion_screen.dart';
 import 'patient_profile_display_screen.dart';
 import 'brain_tumor_detector.dart';
+import 'patient_chats_list_screen.dart';
 
 class WelcomeScreen extends StatefulWidget {
   final String patientName;

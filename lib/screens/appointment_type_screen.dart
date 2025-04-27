@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'booking_confirmation_screen.dart';
-import 'chat_screen.dart';
+import 'patient_chat_screen.dart';
 import 'chat_service.dart';
 import 'video_call_screen.dart';
 
@@ -85,10 +85,11 @@ class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ChatScreen(
+        builder: (context) => PatientChatScreen(
           chatId: chatId,
           doctorId: widget.doctorId,
           patientId: widget.patientId,
+          patientName: widget.patientName,
         ),
       ),
     );

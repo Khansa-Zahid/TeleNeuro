@@ -259,25 +259,50 @@ class _DoctorPrescriptionScreenState extends State<DoctorPrescriptionScreen> {
           .collection("appointments")
           .where("doctor_id", isEqualTo: widget.doctorId)
           .where("client_id", isEqualTo: widget.patientId)
-          .orderBy("date_time", descending: true)
-          .limit(1)
           .get();
 
       print("Found ${appointmentSnapshot.docs.length} appointments");
 
       if (appointmentSnapshot.docs.isNotEmpty && mounted) {
-        Map<String, dynamic> data =
-            appointmentSnapshot.docs.first.data() as Map<String, dynamic>;
-        print("Latest appointment: ${data.toString()}");
+        try {
+          Map<String, dynamic> data =
+              appointmentSnapshot.docs.first.data() as Map<String, dynamic>;
+          print("Latest appointment data: ${data.toString()}");
 
+          String status = "unknown";
+          if (data.containsKey('status')) {
+            status = data['status']?.toString() ?? "unknown";
+          }
+
+          setState(() {
+            _hasAppointment = true;
+            _appointmentStatus = status;
+          });
+          print(
+              "Has appointment: $_hasAppointment, status: $_appointmentStatus");
+        } catch (dataError) {
+          print("Error processing appointment data: $dataError");
+          setState(() {
+            _hasAppointment = true;
+            _appointmentStatus = "unknown";
+          });
+        }
+      } else if (mounted) {
         setState(() {
-          _hasAppointment = true;
-          _appointmentStatus = data['status'] ?? "unknown";
+          _hasAppointment = false;
+          _appointmentStatus = "none";
         });
-        print("Has appointment: $_hasAppointment, status: $_appointmentStatus");
+        print("No appointments found");
       }
     } catch (e) {
       print("Error checking appointment: $e");
+      // Don't block creating a prescription if appointment check fails
+      if (mounted) {
+        setState(() {
+          _hasAppointment = false;
+          _appointmentStatus = "error";
+        });
+      }
     }
   }
 
@@ -295,10 +320,11 @@ class _DoctorPrescriptionScreenState extends State<DoctorPrescriptionScreen> {
 
   Future<void> _sendNotification() async {
     try {
+      print("Sending notification to patient: ${widget.patientId}");
       await _firestore.collection('notifications').add({
         'client_id': widget.patientId,
         'title': 'New Prescription',
-        'body': 'Dr. $doctorName has added a new prescription for you.',
+        'message': 'Dr. $doctorName has added a new prescription for you.',
         'timestamp': FieldValue.serverTimestamp(),
         'doctorId': widget.doctorId,
         'status': 'unread',
@@ -306,6 +332,7 @@ class _DoctorPrescriptionScreenState extends State<DoctorPrescriptionScreen> {
       print("Notification sent successfully");
     } catch (e) {
       print("Error sending notification: $e");
+      // Don't fail the prescription if notification fails
     }
   }
 
@@ -352,34 +379,50 @@ class _DoctorPrescriptionScreenState extends State<DoctorPrescriptionScreen> {
   }
 
   Future<void> _savePrescriptionDirectly() async {
-    print("Creating prescription directly without appointment check");
+    print("Creating prescription directly");
     try {
       String prescriptionId =
           "presc_${widget.doctorId}_${widget.patientId}_${DateTime.now().millisecondsSinceEpoch}";
 
-      List<Map<String, dynamic>> medicationsList = medications
-          .map((med) => {
-                'name': med['name'] ?? '',
-                'dosage': med['dosage'] ?? '',
-                'frequency': med['frequency'] ?? '',
-              })
-          .toList();
+      print("Converting medication data");
+      List<Map<String, dynamic>> medicationsList = [];
+      try {
+        medicationsList = medications
+            .map((med) => {
+                  'name': med['name'] ?? '',
+                  'dosage': med['dosage'] ?? '',
+                  'frequency': med['frequency'] ?? '',
+                })
+            .toList();
+      } catch (medError) {
+        print("Error converting medications: $medError");
+        // Create an empty list as fallback
+        medicationsList = [];
+      }
 
       print("Saving prescription with ID: $prescriptionId");
-      print("Medications: $medicationsList");
+      print("Medications count: ${medicationsList.length}");
 
-      await _firestore.collection('prescriptions').doc(prescriptionId).set({
+      Map<String, dynamic> prescriptionData = {
         'prescription_id': prescriptionId,
         'doctor_id': widget.doctorId,
+        'doctor_name': doctorName,
         'patient_id': widget.patientId,
+        'patient_name': patientName,
         'date': Timestamp.now(),
         'medications': medicationsList,
         'additional_notes': _notesController.text,
         'created_manually': true,
-      });
+      };
+
+      print("Saving prescription data: ${prescriptionData.toString()}");
+      await _firestore
+          .collection('prescriptions')
+          .doc(prescriptionId)
+          .set(prescriptionData);
+      print("Prescription saved successfully to Firestore");
 
       await _sendNotification();
-      print("Prescription saved successfully");
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -388,7 +431,7 @@ class _DoctorPrescriptionScreenState extends State<DoctorPrescriptionScreen> {
         Navigator.pop(context);
       }
     } catch (e) {
-      print("Error saving prescription directly: $e");
+      print("CRITICAL ERROR saving prescription directly: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text("Failed to save prescription: ${e.toString()}"),
@@ -398,7 +441,7 @@ class _DoctorPrescriptionScreenState extends State<DoctorPrescriptionScreen> {
   }
 
   Future<void> _savePrescription() async {
-    print("Saving prescription");
+    print("Starting prescription save process");
     if (!_validateMedications()) {
       print("Medication validation failed");
       return;
@@ -409,14 +452,12 @@ class _DoctorPrescriptionScreenState extends State<DoctorPrescriptionScreen> {
     });
 
     try {
-      // First try using the service (which requires an appointment)
+      // First try using the service
       if (_hasAppointment && _appointmentStatus == "accepted") {
-        print(
-            "Using FirestoreService to save prescription (has accepted appointment)");
+        print("Using FirestoreService for accepted appointment");
         try {
           await FirestoreService().addPrescription(widget.doctorId,
               widget.patientId, medications, _notesController.text);
-          await _sendNotification();
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -430,6 +471,8 @@ class _DoctorPrescriptionScreenState extends State<DoctorPrescriptionScreen> {
               "Error with FirestoreService: $serviceError, trying direct method...");
           // If the service fails, fall back to direct method
         }
+      } else {
+        print("No accepted appointment, using direct method");
       }
 
       // Fall back to direct method if no appointment or service failed
@@ -604,19 +647,19 @@ class _DoctorPrescriptionScreenState extends State<DoctorPrescriptionScreen> {
                             margin: EdgeInsets.only(top: 8),
                             padding: EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: Colors.orange[100],
+                              color: Colors.blue[100],
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.orange),
+                              border: Border.all(color: Colors.blue),
                             ),
                             child: Row(
                               children: [
                                 Icon(Icons.info_outline,
-                                    color: Colors.orange[800]),
+                                    color: Colors.blue[800]),
                                 SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    "No active appointment found with this patient. Prescription will be created directly.",
-                                    style: TextStyle(color: Colors.orange[800]),
+                                    "No active appointment found with this patient. You can still create a prescription.",
+                                    style: TextStyle(color: Colors.blue[800]),
                                   ),
                                 ),
                               ],

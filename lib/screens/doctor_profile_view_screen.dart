@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'appointment_type_screen.dart';
 
 class DoctorProfileViewScreen extends StatefulWidget {
   final String doctorId;
@@ -90,15 +91,114 @@ class _DoctorProfileViewScreenState extends State<DoctorProfileViewScreen> {
                     ],
                   ),
                 )
-              : SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      _buildProfileHeader(),
-                      _buildDetailsCard(),
-                      _buildAdditionalInfo(),
-                    ],
+              : Stack(
+                  children: [
+                    SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          _buildProfileHeader(),
+                          _buildDetailsCard(),
+                          _buildAdditionalInfo(),
+                          SizedBox(height: 80), // Space for the button
+                        ],
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: _buildBookAppointmentButton(),
+                    ),
+                  ],
+                ),
+    );
+  }
+
+  Widget _buildBookAppointmentButton() {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 8,
+            offset: Offset(0, -3),
+          ),
+        ],
+      ),
+      child: ElevatedButton.icon(
+        onPressed: () async {
+          try {
+            // Get the current user's ID
+            // This should be passed from the previous screen or stored in a global state
+            String? patientId;
+
+            // If you're navigating from FindDoctorScreen, you should receive patientId
+            // For now, try to get it from the arguments
+            final args = ModalRoute.of(context)?.settings.arguments;
+            if (args is Map<String, dynamic> && args.containsKey('patientId')) {
+              patientId = args['patientId'];
+            }
+
+            if (patientId == null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                    content: Text(
+                        "Patient ID not found. Please try from the Find Doctor screen.")),
+              );
+              return;
+            }
+
+            // Fetch patient data
+            DocumentSnapshot patientSnapshot =
+                await _firestore.collection('clients').doc(patientId).get();
+
+            if (patientSnapshot.exists) {
+              final patientData =
+                  patientSnapshot.data() as Map<String, dynamic>;
+              final patientName = patientData['name'] ?? 'Unknown Patient';
+
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AppointmentTypeScreen(
+                    doctorId: widget.doctorId,
+                    doctorName: _doctorData['name'] ?? 'Unknown Doctor',
+                    specialization:
+                        _doctorData['specialization'] ?? 'Not specified',
+                    patientId: patientId!,
+                    patientName: patientName,
+                    channelName: patientId,
                   ),
                 ),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Patient not found in database")),
+              );
+            }
+          } catch (e) {
+            print("Error navigating to appointment screen: $e");
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("Error: $e")),
+            );
+          }
+        },
+        icon: Icon(Icons.calendar_today, color: Colors.white),
+        label: Text(
+          "Book Appointment",
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.teal.shade700,
+          padding: EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      ),
     );
   }
 

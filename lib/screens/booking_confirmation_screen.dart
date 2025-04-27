@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'chat_screen.dart';
 import 'video_call_screen.dart';
 import 'chat_service.dart';
+import 'patient_chat_screen.dart';
 
 class BookingConfirmationScreen extends StatefulWidget {
   final String doctorName;
@@ -45,13 +46,25 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
     try {
       String chatId = await _chatService.getChatId(doctorId, patientId);
       if (chatId.isNotEmpty && mounted) {
+        // Get patient name
+        DocumentSnapshot patientSnapshot = await FirebaseFirestore.instance
+            .collection('clients')
+            .doc(patientId)
+            .get();
+        String patientName = 'Patient';
+        if (patientSnapshot.exists) {
+          final patientData = patientSnapshot.data() as Map<String, dynamic>;
+          patientName = patientData['name'] ?? 'Patient';
+        }
+
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => ChatScreen(
+            builder: (context) => PatientChatScreen(
               chatId: chatId,
               doctorId: doctorId,
               patientId: patientId,
+              patientName: patientName,
             ),
           ),
         );

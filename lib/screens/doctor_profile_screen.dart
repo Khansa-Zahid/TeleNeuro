@@ -3,13 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
-import 'chat_screen.dart';
-import 'chat_service.dart';
 import 'doctor_appointments_screen.dart';
 import 'profile_selection_screen.dart';
 import 'Doctor_Profile_Completion_Screen.dart';
 import 'doctor_prescription_screen.dart';
 import 'select_patient_screen.dart';
+import 'doctor_chats_list_screen.dart';
 
 class DoctorProfileScreen extends StatefulWidget {
   final String doctorId;
@@ -21,7 +20,6 @@ class DoctorProfileScreen extends StatefulWidget {
 }
 
 class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
-  final ChatService _chatService = ChatService();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   String currentTime = '';
   String doctorName = "Loading...";
@@ -35,7 +33,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     _updateTime();
     _fetchDoctorName();
     _fetchNotifications();
-    _timer = Timer.periodic(const Duration(minutes: 1), (timer) => _updateTime());
+    _timer =
+        Timer.periodic(const Duration(minutes: 1), (timer) => _updateTime());
   }
 
   @override
@@ -52,7 +51,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
 
   Future<void> _fetchDoctorName() async {
     try {
-      DocumentSnapshot doc = await _firestore.collection('doctors').doc(widget.doctorId).get();
+      DocumentSnapshot doc =
+          await _firestore.collection('doctors').doc(widget.doctorId).get();
       if (doc.exists && mounted) {
         setState(() {
           doctorName = doc['name'] ?? "Unknown Doctor";
@@ -86,44 +86,26 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
 
   Future<void> _markAsRead(String docId) async {
     try {
-      await _firestore.collection('notifications').doc(docId).update({'read': true});
+      await _firestore
+          .collection('notifications')
+          .doc(docId)
+          .update({'read': true});
       _fetchNotifications();
     } catch (e) {
       debugPrint("Error marking notification as read: $e");
     }
   }
 
-  void openChat(String patientId) async {
-    String chatId = await _chatService.getChatId(widget.doctorId, patientId);
-
-    if (chatId.isNotEmpty) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ChatScreen(
-            chatId: chatId,
-            doctorId: widget.doctorId,
-            patientId: patientId,
-          ),
+  void _navigateToChatsList() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SelectPatientScreen(
+          doctorId: widget.doctorId,
+          isForChat: true,
         ),
-      );
-    } else {
-      print("Failed to get chat ID.");
-    }
-  }
-
-  VoidCallback _chatScreen() {
-    return () {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => SelectPatientScreen(
-            doctorId: widget.doctorId,
-            isForChat: true,
-          ),
-        ),
-      );
-    };
+      ),
+    );
   }
 
   @override
@@ -131,9 +113,12 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[200],
       appBar: AppBar(
-        title: const Text("Dashboard", style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.teal[500],
-        actions: [_buildNotificationIcon()],
+        title: const Text("Dashboard",
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.teal.shade700,
+        actions: [
+          _buildNotificationIcon(),
+        ],
       ),
       drawer: _buildDrawer(),
       body: Stack(
@@ -159,7 +144,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       children: [
         IconButton(
           icon: const Icon(Icons.notifications, size: 30, color: Colors.white),
-          onPressed: () => setState(() => isDropdownVisible = !isDropdownVisible),
+          onPressed: () =>
+              setState(() => isDropdownVisible = !isDropdownVisible),
         ),
         if (notifications.isNotEmpty)
           Positioned(
@@ -182,19 +168,29 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [Colors.teal.shade400, Colors.teal.shade200]),
+        gradient: LinearGradient(
+            colors: [Colors.teal.shade600, Colors.indigo.shade300]),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
-          BoxShadow(color: Colors.grey.withOpacity(0.3), blurRadius: 8, spreadRadius: 2)
+          BoxShadow(
+              color: Colors.grey.withOpacity(0.3),
+              blurRadius: 8,
+              spreadRadius: 2)
         ],
       ),
       child: Column(
         children: [
           Text("Welcome, Dr. $doctorName!",
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+              style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white)),
           const SizedBox(height: 5),
           Text(currentTime,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+              style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white)),
         ],
       ),
     );
@@ -212,14 +208,16 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
           color: Colors.orange,
           onTap: () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => DoctorAppointmentsScreen(doctorId: widget.doctorId)),
+            MaterialPageRoute(
+                builder: (context) =>
+                    DoctorAppointmentsScreen(doctorId: widget.doctorId)),
           ),
         ),
         _buildDashboardCard(
           icon: Icons.chat,
-          title: "Chat with Patients",
-          color: Colors.green,
-          onTap: _chatScreen(),
+          title: "Patient Consultations",
+          color: Colors.indigo,
+          onTap: _navigateToChatsList,
         ),
         _buildDashboardCard(
           icon: Icons.folder_shared,
@@ -233,7 +231,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
           color: Colors.teal,
           onTap: () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => DoctorProfileCompletionScreen(doctorId: widget.doctorId)),
+            MaterialPageRoute(
+                builder: (context) =>
+                    DoctorProfileCompletionScreen(doctorId: widget.doctorId)),
           ),
         ),
         _buildDashboardCard(
@@ -242,7 +242,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
           color: Colors.blue,
           onTap: () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => SelectPatientScreen(doctorId: widget.doctorId)),
+            MaterialPageRoute(
+                builder: (context) =>
+                    SelectPatientScreen(doctorId: widget.doctorId)),
           ),
         ),
       ],
@@ -257,26 +259,33 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   }) {
     return GestureDetector(
       onTap: onTap,
-      child: Card(
-        elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(15),
-            boxShadow: [BoxShadow(color: color.withOpacity(0.2), blurRadius: 10, spreadRadius: 2)],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircleAvatar(
-                radius: 30,
-                backgroundColor: color.withOpacity(0.2),
-                child: Icon(icon, color: color, size: 30),
-              ),
-              const SizedBox(height: 10),
-              Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            ],
-          ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.shade300,
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircleAvatar(
+              radius: 30,
+              backgroundColor: color.withOpacity(0.2),
+              child: Icon(icon, size: 35, color: color),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+          ],
         ),
       ),
     );
@@ -284,108 +293,209 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
 
   Widget _buildNotificationDropdown() {
     return Positioned(
-      top: kToolbarHeight + 10,
-      right: 10,
+      top: 0,
+      right: 16,
       child: Material(
-        elevation: 5,
+        elevation: 8,
         borderRadius: BorderRadius.circular(10),
-        color: Colors.white,
         child: Container(
           width: 300,
-          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
-          child: notifications.isEmpty
-              ? const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Text("No new notifications"),
-          )
-              : ListView.builder(
-            shrinkWrap: true,
-            itemCount: notifications.length,
-            itemBuilder: (context, index) {
-              final notif = notifications[index];
-              return ListTile(
-                title: Text(notif['title'] ?? 'Notification',
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(notif['message'] ?? ''),
-                trailing: const Icon(Icons.check, color: Colors.green),
-                onTap: () => _markAsRead(notif['id']),
-              );
-            },
+          constraints: const BoxConstraints(maxHeight: 400),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Notifications",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.teal.shade800,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    onPressed: () => setState(() => isDropdownVisible = false),
+                  ),
+                ],
+              ),
+              const Divider(),
+              notifications.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Center(
+                          child: Text("No new notifications",
+                              style: TextStyle(color: Colors.grey))),
+                    )
+                  : Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: notifications.length,
+                        itemBuilder: (context, index) {
+                          return _buildNotificationItem(notifications[index]);
+                        },
+                      ),
+                    ),
+            ],
           ),
         ),
       ),
     );
   }
 
+  Widget _buildNotificationItem(Map<String, dynamic> notification) {
+    String notifType = notification['type'] ?? 'general';
+    IconData iconData;
+    Color iconColor;
+
+    switch (notifType) {
+      case 'appointment_request':
+        iconData = Icons.calendar_today;
+        iconColor = Colors.orange;
+        break;
+      case 'messages':
+        iconData = Icons.chat;
+        iconColor = Colors.green;
+        break;
+      default:
+        iconData = Icons.notifications;
+        iconColor = Colors.green;
+    }
+
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: iconColor.withOpacity(0.2),
+        child: Icon(iconData, color: iconColor),
+      ),
+      title: Text(
+        notification['title'] ?? 'Notification',
+        style: const TextStyle(fontWeight: FontWeight.bold),
+      ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(notification['message'] ?? ''),
+          if (notification['timestamp'] != null)
+            Text(
+              DateFormat('MMM d, h:mm a').format(
+                (notification['timestamp'] as Timestamp).toDate(),
+              ),
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+        ],
+      ),
+      onTap: () {
+        _markAsRead(notification['id']);
+        // Handle notification action based on type
+        if (notifType == 'appointment_request' &&
+            notification['appointment_id'] != null) {
+          // Navigate to appointment details
+          // Implementation depends on your appointment screen
+        } else if (notifType == 'message' && notification['chat_id'] != null) {
+          // Navigate to chat screen
+          // Implementation depends on your chat screen
+        }
+        setState(() => isDropdownVisible = false);
+      },
+    );
+  }
+
   Widget _buildDrawer() {
     return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
+      child: Column(
         children: [
           DrawerHeader(
-            decoration: BoxDecoration(color: Colors.teal[500]),
-            child: Row(
+            decoration: BoxDecoration(color: Colors.teal.shade700),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const CircleAvatar(
-                  radius: 35,
+                  radius: 40,
                   backgroundColor: Colors.white,
-                  child: Icon(Icons.person, size: 45, color: Colors.blue),
+                  child: Icon(Icons.person, size: 40, color: Colors.indigo),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    "Dr. $doctorName",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+                const SizedBox(height: 10),
+                Text(
+                  "Dr. $doctorName",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ],
             ),
           ),
           _buildDrawerItem(
-            icon: Icons.calendar_today,
-            title: "Appointments",
-            color: Colors.orange,
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => DoctorAppointmentsScreen(doctorId: widget.doctorId)),
-            ),
+            Icons.dashboard,
+            "Dashboard",
+            () => Navigator.pop(context),
           ),
           _buildDrawerItem(
-            icon: Icons.description,
-            title: "Prescriptions",
-            color: Colors.deepPurple,
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => SelectPatientScreen(doctorId: widget.doctorId)),
-            ),
+            Icons.calendar_today,
+            "Appointments",
+            () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      DoctorAppointmentsScreen(doctorId: widget.doctorId),
+                ),
+              );
+            },
           ),
           _buildDrawerItem(
-            icon: Icons.logout,
-            title: "Logout",
-            color: Colors.red,
-            onTap: () => Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const ProfileSelectionScreen()),
-            ),
+            Icons.chat,
+            "Patient Consultations",
+            () {
+              Navigator.pop(context);
+              _navigateToChatsList();
+            },
+          ),
+          _buildDrawerItem(
+            Icons.person,
+            "Update Profile",
+            () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      DoctorProfileCompletionScreen(doctorId: widget.doctorId),
+                ),
+              );
+            },
+          ),
+          const Divider(),
+          _buildDrawerItem(
+            Icons.logout,
+            "Logout",
+            () {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const ProfileSelectionScreen()),
+                (Route<dynamic> route) => false,
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDrawerItem({
-    required IconData icon,
-    required String title,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
+  Widget _buildDrawerItem(IconData icon, String title, VoidCallback onTap) {
     return ListTile(
-      leading: Icon(icon, color: color),
+      leading: Icon(icon, color: Colors.teal.shade700),
       title: Text(title),
       onTap: onTap,
     );
