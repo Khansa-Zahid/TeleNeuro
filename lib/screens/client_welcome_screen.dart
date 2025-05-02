@@ -7,7 +7,6 @@ import 'patient_prescription_screen.dart';
 import 'appointment_status_screen.dart';
 import 'patient_profile_completion_screen.dart';
 import 'patient_profile_display_screen.dart';
-import 'brain_tumor_detector.dart';
 import 'patient_chats_list_screen.dart';
 
 class WelcomeScreen extends StatefulWidget {
@@ -253,16 +252,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                             MaterialPageRoute(
                               builder: (context) => AppointmentStatusScreen(
                                   clientId: widget.patientId),
-                            ),
-                          );
-                        }),
-                        _dashboardCard(Icons.medical_services, "AI Diagnose",
-                            Colors.deepPurple, () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => BrainTumorDetector(
-                                  patientId: widget.patientId),
                             ),
                           );
                         }),

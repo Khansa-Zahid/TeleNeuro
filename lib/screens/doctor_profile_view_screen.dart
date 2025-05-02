@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'appointment_type_screen.dart';
+import 'chat_service.dart';
+import 'patient_chat_screen.dart';
+import 'video_call_screen.dart';
 
 class DoctorProfileViewScreen extends StatefulWidget {
   final String doctorId;
@@ -17,11 +20,161 @@ class _DoctorProfileViewScreenState extends State<DoctorProfileViewScreen> {
   bool _isLoading = true;
   Map<String, dynamic> _doctorData = {};
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final ChatService _chatService = ChatService();
+  String? _patientId;
+  String? _patientName;
+  bool _isConsultationRequestLoading = false;
+  Map<String, dynamic> _consultationRequestData = {
+    'exists': false,
+    'status': 'none',
+  };
 
   @override
   void initState() {
     super.initState();
     _fetchDoctorData();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Get patient ID from arguments
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map<String, dynamic> && args.containsKey('patientId')) {
+      _patientId = args['patientId'];
+      _fetchPatientData();
+      _checkConsultationRequest();
+    }
+  }
+
+  Future<void> _fetchPatientData() async {
+    if (_patientId == null) return;
+
+    try {
+      DocumentSnapshot patientDoc =
+          await _firestore.collection('clients').doc(_patientId).get();
+
+      if (patientDoc.exists) {
+        setState(() {
+          _patientName = patientDoc['name'];
+        });
+      }
+    } catch (e) {
+      print("Error fetching patient data: $e");
+    }
+  }
+
+  Future<void> _checkConsultationRequest() async {
+    if (_patientId == null) return;
+
+    setState(() {
+      _isConsultationRequestLoading = true;
+    });
+
+    try {
+      var result = await _chatService.checkConsultationRequest(
+          widget.doctorId, _patientId!);
+
+      setState(() {
+        _consultationRequestData = result;
+        _isConsultationRequestLoading = false;
+      });
+    } catch (e) {
+      print("Error checking consultation request: $e");
+      setState(() {
+        _isConsultationRequestLoading = false;
+      });
+    }
+  }
+
+  Future<void> _sendConsultationRequest() async {
+    if (_patientId == null || _patientName == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Patient information not available")),
+      );
+      return;
+    }
+
+    setState(() {
+      _isConsultationRequestLoading = true;
+    });
+
+    try {
+      bool result = await _chatService.createConsultationRequest(
+          widget.doctorId, _patientId!, _patientName!);
+
+      setState(() {
+        _consultationRequestData = {
+          'exists': true,
+          'status': result ? 'accepted' : 'pending',
+        };
+        _isConsultationRequestLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result
+              ? "Consultation request accepted!"
+              : "Consultation request sent!"),
+          backgroundColor: result ? Colors.green : Colors.blue,
+        ),
+      );
+    } catch (e) {
+      print("Error sending consultation request: $e");
+      setState(() {
+        _isConsultationRequestLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error sending request: $e")),
+      );
+    }
+  }
+
+  Future<void> _navigateToChat() async {
+    if (_patientId == null || _patientName == null) return;
+
+    try {
+      String chatId =
+          await _chatService.getChatId(widget.doctorId, _patientId!);
+      if (chatId.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Could not initialize chat")),
+        );
+        return;
+      }
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PatientChatScreen(
+            chatId: chatId,
+            doctorId: widget.doctorId,
+            patientId: _patientId!,
+            patientName: _patientName!,
+          ),
+        ),
+      );
+    } catch (e) {
+      print("Error navigating to chat: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e")),
+      );
+    }
+  }
+
+  void _navigateToVideoCall() {
+    if (_patientId == null) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => VideoCallScreen(
+          doctorId: widget.doctorId,
+          patientId: _patientId!,
+        ),
+      ),
+    );
   }
 
   Future<void> _fetchDoctorData() async {
@@ -128,76 +281,145 @@ class _DoctorProfileViewScreenState extends State<DoctorProfileViewScreen> {
           ),
         ],
       ),
-      child: ElevatedButton.icon(
-        onPressed: () async {
-          try {
-            // Get the current user's ID
-            // This should be passed from the previous screen or stored in a global state
-            String? patientId;
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ElevatedButton.icon(
+            onPressed: () async {
+              try {
+                // Get the current user's ID
+                // This should be passed from the previous screen or stored in a global state
+                String? patientId = _patientId;
 
-            // If you're navigating from FindDoctorScreen, you should receive patientId
-            // For now, try to get it from the arguments
-            final args = ModalRoute.of(context)?.settings.arguments;
-            if (args is Map<String, dynamic> && args.containsKey('patientId')) {
-              patientId = args['patientId'];
-            }
+                if (patientId == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                        content: Text(
+                            "Patient ID not found. Please try from the Find Doctor screen.")),
+                  );
+                  return;
+                }
 
-            if (patientId == null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                    content: Text(
-                        "Patient ID not found. Please try from the Find Doctor screen.")),
-              );
-              return;
-            }
+                // Fetch patient data
+                DocumentSnapshot patientSnapshot =
+                    await _firestore.collection('clients').doc(patientId).get();
 
-            // Fetch patient data
-            DocumentSnapshot patientSnapshot =
-                await _firestore.collection('clients').doc(patientId).get();
+                if (patientSnapshot.exists) {
+                  final patientData =
+                      patientSnapshot.data() as Map<String, dynamic>;
+                  final patientName = patientData['name'] ?? 'Unknown Patient';
 
-            if (patientSnapshot.exists) {
-              final patientData =
-                  patientSnapshot.data() as Map<String, dynamic>;
-              final patientName = patientData['name'] ?? 'Unknown Patient';
-
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => AppointmentTypeScreen(
-                    doctorId: widget.doctorId,
-                    doctorName: _doctorData['name'] ?? 'Unknown Doctor',
-                    specialization:
-                        _doctorData['specialization'] ?? 'Not specified',
-                    patientId: patientId!,
-                    patientName: patientName,
-                    channelName: patientId,
-                  ),
-                ),
-              );
-            } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Patient not found in database")),
-              );
-            }
-          } catch (e) {
-            print("Error navigating to appointment screen: $e");
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("Error: $e")),
-            );
-          }
-        },
-        icon: Icon(Icons.calendar_today, color: Colors.white),
-        label: Text(
-          "Book Appointment",
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.teal.shade700,
-          padding: EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AppointmentTypeScreen(
+                        doctorId: widget.doctorId,
+                        doctorName: _doctorData['name'] ?? 'Unknown Doctor',
+                        specialization:
+                            _doctorData['specialization'] ?? 'Not specified',
+                        patientId: patientId,
+                        patientName: patientName,
+                        channelName: patientId,
+                      ),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text("Patient not found in database")),
+                  );
+                }
+              } catch (e) {
+                print("Error navigating to appointment screen: $e");
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("Error: $e")),
+                );
+              }
+            },
+            icon: Icon(Icons.calendar_today, color: Colors.white),
+            label: Text(
+              "Book Appointment",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal.shade700,
+              padding: EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
           ),
-        ),
+
+          SizedBox(height: 8),
+
+          // Consultation Options
+          _isConsultationRequestLoading
+              ? Center(
+                  child: SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.indigo,
+                    ),
+                  ),
+                )
+              : _consultationRequestData['status'] == 'accepted'
+                  ? Row(
+                      children: [
+                        // Message button
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _navigateToChat,
+                            icon: Icon(Icons.chat, color: Colors.white),
+                            label: Text("Message"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.indigo.shade700,
+                              padding: EdgeInsets.symmetric(vertical: 10),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        // Video call button
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _navigateToVideoCall,
+                            icon: Icon(Icons.videocam, color: Colors.white),
+                            label: Text("Video Call"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green.shade700,
+                              padding: EdgeInsets.symmetric(vertical: 10),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : ElevatedButton.icon(
+                      onPressed: _consultationRequestData['status'] == 'pending'
+                          ? null // Disable if already pending
+                          : _sendConsultationRequest,
+                      icon: Icon(
+                        _consultationRequestData['status'] == 'pending'
+                            ? Icons.hourglass_empty
+                            : Icons.send,
+                        color: Colors.white,
+                      ),
+                      label: Text(
+                        _consultationRequestData['status'] == 'pending'
+                            ? "Request Pending"
+                            : "Send Consultation Request",
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.indigo.shade700,
+                        disabledBackgroundColor: Colors.grey.shade400,
+                        padding: EdgeInsets.symmetric(vertical: 10),
+                      ),
+                    ),
+        ],
       ),
     );
   }

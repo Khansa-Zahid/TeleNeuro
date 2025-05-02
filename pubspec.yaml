@@ -103,6 +103,8 @@ flutter:
     - lib/assets/images/consult.png
     - lib/assets/images/companion.png
     - lib/assets/Brain_Tumor_Model.tflite
+    - lib/assets/alzh_model.tflite
+  
 
 
   # An image asset can refer to one or more resolution-specific "variants", see

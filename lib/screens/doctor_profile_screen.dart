@@ -9,6 +9,7 @@ import 'Doctor_Profile_Completion_Screen.dart';
 import 'doctor_prescription_screen.dart';
 import 'select_patient_screen.dart';
 import 'doctor_chats_list_screen.dart';
+import 'chat_service.dart';
 
 class DoctorProfileScreen extends StatefulWidget {
   final String doctorId;
@@ -365,6 +366,10 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         iconData = Icons.chat;
         iconColor = Colors.green;
         break;
+      case 'consultation_request':
+        iconData = Icons.medical_services;
+        iconColor = Colors.indigo;
+        break;
       default:
         iconData = Icons.notifications;
         iconColor = Colors.green;
@@ -392,6 +397,16 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
             ),
         ],
       ),
+      trailing: notifType == 'consultation_request'
+          ? TextButton(
+              onPressed: () => _handleConsultationRequest(notification),
+              child: Text('Accept', style: TextStyle(color: Colors.indigo)),
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.indigo.withOpacity(0.1),
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              ),
+            )
+          : null,
       onTap: () {
         _markAsRead(notification['id']);
         // Handle notification action based on type
@@ -402,10 +417,99 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         } else if (notifType == 'message' && notification['chat_id'] != null) {
           // Navigate to chat screen
           // Implementation depends on your chat screen
+        } else if (notifType == 'consultation_request') {
+          _handleConsultationRequest(notification);
         }
         setState(() => isDropdownVisible = false);
       },
     );
+  }
+
+  void _handleConsultationRequest(Map<String, dynamic> notification) async {
+    String? patientId = notification['patient_id'];
+
+    if (patientId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Patient information missing")),
+      );
+      return;
+    }
+
+    try {
+      // Create a ChatService instance
+      final chatService = ChatService();
+
+      // First verify if there's an actual consultation request
+      var requestCheck = await chatService.checkConsultationRequest(
+          widget.doctorId, patientId);
+
+      if (!requestCheck['exists'] || requestCheck['status'] == 'accepted') {
+        _markAsRead(notification['id']);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(requestCheck['status'] == 'accepted'
+                  ? "Request already accepted"
+                  : "No active request found")),
+        );
+        return;
+      }
+
+      // Show loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(width: 12),
+              Text("Accepting request..."),
+            ],
+          ),
+          duration: Duration(seconds: 1),
+        ),
+      );
+
+      // Accept the consultation request
+      bool success =
+          await chatService.acceptConsultationRequest(requestCheck['id']);
+
+      if (success) {
+        // Mark notification as read
+        _markAsRead(notification['id']);
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Consultation request accepted"),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Refresh notifications
+        _fetchNotifications();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Failed to accept request"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      print("Error handling consultation request: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Widget _buildDrawer() {

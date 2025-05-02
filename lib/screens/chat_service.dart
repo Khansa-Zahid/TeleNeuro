@@ -31,6 +31,131 @@ class ChatService {
     }
   }
 
+  // Method to check if consultation request exists and its status
+  Future<Map<String, dynamic>> checkConsultationRequest(
+      String doctorId, String patientId) async {
+    try {
+      QuerySnapshot query = await _firestore
+          .collection('consultation_requests')
+          .where('doctor_id', isEqualTo: doctorId)
+          .where('patient_id', isEqualTo: patientId)
+          .limit(1)
+          .get();
+
+      if (query.docs.isNotEmpty) {
+        var data = query.docs.first.data() as Map<String, dynamic>;
+        return {
+          'exists': true,
+          'status': data['status'] ?? 'pending',
+          'id': query.docs.first.id,
+        };
+      } else {
+        return {
+          'exists': false,
+          'status': 'none',
+          'id': '',
+        };
+      }
+    } catch (e) {
+      print("Error checking consultation request: $e");
+      return {
+        'exists': false,
+        'status': 'error',
+        'id': '',
+      };
+    }
+  }
+
+  // Method to create consultation request
+  Future<bool> createConsultationRequest(
+      String doctorId, String patientId, String patientName) async {
+    try {
+      // First check if a request already exists
+      var checkResult = await checkConsultationRequest(doctorId, patientId);
+      if (checkResult['exists']) {
+        return checkResult['status'] == 'accepted';
+      }
+
+      // Create new consultation request
+      await _firestore.collection('consultation_requests').add({
+        'doctor_id': doctorId,
+        'patient_id': patientId,
+        'patient_name': patientName,
+        'status': 'pending',
+        'created_at': FieldValue.serverTimestamp(),
+      });
+
+      // Add notification for doctor
+      await _firestore.collection('notifications').add({
+        'receiver_id': doctorId,
+        'sender_id': patientId,
+        'title': 'New Consultation Request',
+        'message': '$patientName would like to consult with you',
+        'timestamp': FieldValue.serverTimestamp(),
+        'read': false,
+        'type': 'consultation_request',
+        'patient_id': patientId,
+      });
+
+      return false;
+    } catch (e) {
+      print("Error creating consultation request: $e");
+      return false;
+    }
+  }
+
+  // Method to accept consultation request
+  Future<bool> acceptConsultationRequest(String requestId) async {
+    try {
+      DocumentSnapshot requestDoc = await _firestore
+          .collection('consultation_requests')
+          .doc(requestId)
+          .get();
+
+      if (!requestDoc.exists) {
+        return false;
+      }
+
+      var data = requestDoc.data() as Map<String, dynamic>;
+      String doctorId = data['doctor_id'] ?? '';
+      String patientId = data['patient_id'] ?? '';
+      String patientName = data['patient_name'] ?? 'Patient';
+
+      if (doctorId.isEmpty || patientId.isEmpty) {
+        return false;
+      }
+
+      // Update request status
+      await _firestore
+          .collection('consultation_requests')
+          .doc(requestId)
+          .update({
+        'status': 'accepted',
+        'accepted_at': FieldValue.serverTimestamp(),
+      });
+
+      // Create chat if it doesn't exist
+      String chatId = await getChatId(doctorId, patientId);
+
+      // Add notification for patient
+      await _firestore.collection('notifications').add({
+        'receiver_id': patientId,
+        'sender_id': doctorId,
+        'title': 'Consultation Request Accepted',
+        'message': 'Your doctor has accepted your consultation request',
+        'timestamp': FieldValue.serverTimestamp(),
+        'read': false,
+        'type': 'consultation_accepted',
+        'chat_id': chatId,
+      });
+
+      return true;
+    } catch (e) {
+      print("Error accepting consultation request: $e");
+      return false;
+    }
+  }
+
   // Method to Send Message
   Future<void> sendMessage(
       String chatId, String message, String senderId, String receiverId,

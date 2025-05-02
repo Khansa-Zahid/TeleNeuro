@@ -272,7 +272,7 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                         );
                       }
                     } catch (e) {
-                      print("Error fetching patient data: $e");
+                      debugPrint("Error booking appointment: $e");
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text("Error: $e")),
                       );
@@ -281,7 +281,8 @@ class _FindDoctorScreenState extends State<FindDoctorScreen> {
                   icon: const Icon(Icons.calendar_today, size: 16),
                   label: const Text("Book Appointment"),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.teal.shade500,
+                    backgroundColor: Colors.teal.shade700,
+                    foregroundColor: Colors.white,
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   ),

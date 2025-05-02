@@ -4,6 +4,8 @@ import 'booking_confirmation_screen.dart';
 import 'patient_chat_screen.dart';
 import 'chat_service.dart';
 import 'video_call_screen.dart';
+import 'brain_tumor_detector.dart';
+import 'alzheimer_detector.dart';
 
 class AppointmentTypeScreen extends StatefulWidget {
   final String patientId;
@@ -24,7 +26,7 @@ class AppointmentTypeScreen extends StatefulWidget {
   });
 
   @override
-  _AppointmentTypeScreenState createState() => _AppointmentTypeScreenState();
+  State<AppointmentTypeScreen> createState() => _AppointmentTypeScreenState();
 }
 
 class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
@@ -33,18 +35,73 @@ class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
   bool hasAcceptedAppointment = false;
   String? existingAppointmentType;
 
+  bool _isLoading = false;
+  Map<String, dynamic> _consultationRequestData = {
+    'exists': false,
+    'status': 'none'
+  };
+
   @override
   void initState() {
     super.initState();
     _initializeChat();
     _checkExistingAppointments();
+    _checkConsultationRequest();
+  }
+
+  Future<void> _checkConsultationRequest() async {
+    setState(() => _isLoading = true);
+
+    try {
+      var result = await _chatService.checkConsultationRequest(
+          widget.doctorId, widget.patientId);
+      setState(() {
+        _consultationRequestData = result;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print("Error checking consultation request: $e");
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _sendConsultationRequest() async {
+    setState(() => _isLoading = true);
+
+    try {
+      bool result = await _chatService.createConsultationRequest(
+        widget.doctorId,
+        widget.patientId,
+        widget.patientName,
+      );
+      setState(() {
+        _consultationRequestData = {
+          'exists': true,
+          'status': result ? 'accepted' : 'pending'
+        };
+        _isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(result
+            ? "Consultation request accepted!"
+            : "Consultation request sent! Please wait for doctor to accept."),
+        backgroundColor: result ? Colors.green : Colors.orangeAccent,
+      ));
+    } catch (e) {
+      print("Error sending consultation request: $e");
+      setState(() => _isLoading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error sending request: $e")),
+      );
+    }
   }
 
   Future<void> _checkExistingAppointments() async {
     try {
-      FirebaseFirestore firestore = FirebaseFirestore.instance;
-
-      QuerySnapshot existingAppointments = await firestore
+      final firestore = FirebaseFirestore.instance;
+      final existingAppointments = await firestore
           .collection("appointments")
           .where("client_id", isEqualTo: widget.patientId)
           .where("doctor_id", isEqualTo: widget.doctorId)
@@ -52,10 +109,8 @@ class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
           .get();
 
       if (existingAppointments.docs.isNotEmpty) {
-        // Get the appointment type from the first accepted appointment
         var appointmentData =
             existingAppointments.docs.first.data() as Map<String, dynamic>;
-
         setState(() {
           hasAcceptedAppointment = true;
           existingAppointmentType =
@@ -72,9 +127,7 @@ class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
       String id =
           await _chatService.getChatId(widget.doctorId, widget.patientId);
       if (id.isNotEmpty) {
-        setState(() {
-          chatId = id;
-        });
+        setState(() => chatId = id);
       }
     } catch (e) {
       print("Error initializing chat: $e");
@@ -95,111 +148,7 @@ class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
     );
   }
 
-  Future<void> _bookAppointment(String appointmentType) async {
-    try {
-      FirebaseFirestore firestore = FirebaseFirestore.instance;
-
-      // First, check if there's an existing accepted appointment between this patient and doctor
-      QuerySnapshot existingAppointments = await firestore
-          .collection("appointments")
-          .where("client_id", isEqualTo: widget.patientId)
-          .where("doctor_id", isEqualTo: widget.doctorId)
-          .where("status", isEqualTo: "accepted")
-          .get();
-
-      // If there's an existing accepted appointment, go directly to chat or video call
-      if (existingAppointments.docs.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text(
-                  "You already have an accepted appointment with this doctor")),
-        );
-
-        // Go directly to the chat or video call based on appointment type
-        if (appointmentType == "Message") {
-          String chatId =
-              await _chatService.getChatId(widget.doctorId, widget.patientId);
-          if (chatId.isNotEmpty) {
-            _navigateToChat(chatId);
-          }
-        } else if (appointmentType == "Video Call") {
-          _initiateVideoCall();
-        }
-        return;
-      }
-
-      // Create appointment with pending status
-      DocumentReference appointmentRef =
-          await firestore.collection("appointments").add({
-        "client_id": widget.patientId,
-        "doctor_id": widget.doctorId,
-        "status": "pending",
-        "date_time": DateTime.now().toIso8601String(),
-        "appointment_type": appointmentType,
-        "client_name": widget.patientName,
-      });
-
-      String appointmentId = appointmentRef.id;
-
-      // Send notification to doctor about pending appointment
-      await _storeNotification(
-        receiverId: widget.doctorId,
-        title: "New Appointment Request",
-        message:
-            "${widget.patientName} has requested a ${appointmentType} appointment",
-        type: "appointment_request",
-        appointmentId: appointmentId,
-      );
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Appointment request sent to doctor")),
-      );
-
-      // Navigate to booking confirmation screen to show status
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => BookingConfirmationScreen(
-            doctorName: widget.doctorName,
-            specialization: widget.specialization,
-            appointmentType: appointmentType,
-            appointmentId: appointmentId,
-          ),
-        ),
-      );
-    } catch (e) {
-      print("Error booking appointment: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text("Failed to send appointment request. Try again.")),
-      );
-    }
-  }
-
-  Future<void> _storeNotification({
-    required String receiverId,
-    required String title,
-    required String message,
-    required String type,
-    String? appointmentId,
-  }) async {
-    try {
-      await FirebaseFirestore.instance.collection("notifications").add({
-        "receiver_id": receiverId,
-        "title": title,
-        "message": message,
-        "type": type,
-        "appointment_id": appointmentId,
-        "sender_id": widget.patientId,
-        "timestamp": FieldValue.serverTimestamp(),
-        "read": false,
-      });
-    } catch (e) {
-      print("Error storing notification: $e");
-    }
-  }
-
-  void _initiateVideoCall() {
+  void _startVideoCall() {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -211,127 +160,259 @@ class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
     );
   }
 
-  Widget _buildAppointmentOption({
+  Widget _buildOptionCard({
+    required IconData icon,
     required String title,
     required String subtitle,
-    required IconData icon,
     required VoidCallback onTap,
+    Color color = Colors.teal,
   }) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: Colors.teal[700],
-          child: Icon(icon, color: Colors.white),
-        ),
-        title: Text(title,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        subtitle: Text(subtitle),
-        trailing: Icon(Icons.arrow_forward_ios, color: Colors.teal[700]),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+      margin: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.4),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          )
+        ],
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: Colors.white,
+                child: Icon(icon, color: color, size: 30),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white)),
+                    const SizedBox(height: 4),
+                    Text(subtitle,
+                        style: const TextStyle(
+                            fontSize: 14, color: Colors.white70)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_forward_ios_rounded,
+                  color: Colors.white70, size: 18),
+            ],
+          ),
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    bool hasPendingRequest = _consultationRequestData['status'] == 'pending';
+    bool hasAcceptedConsultation =
+        _consultationRequestData['status'] == 'accepted';
+
     return Scaffold(
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: hasAcceptedAppointment
-            ? const Text("Contact Doctor")
-            : const Text("Choose Appointment Type"),
-        backgroundColor: Colors.teal[700],
-        elevation: 0,
+        backgroundColor: Colors.teal,
+        elevation: 4,
+        title: Text(
+          hasAcceptedAppointment || hasAcceptedConsultation
+              ? "Contact Doctor"
+              : "Consult with Doctor",
+          style:
+              const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (hasAcceptedAppointment)
-              // Show message and options for already accepted appointments
-              Column(children: [
-                const Text(
-                  "You already have an accepted appointment with this doctor.",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-                if (existingAppointmentType == "Video Call" ||
-                    existingAppointmentType == null)
-                  _buildAppointmentOption(
-                    title: "Video Call",
-                    subtitle: "Have a face-to-face consultation.",
-                    icon: Icons.video_call,
-                    onTap: _initiateVideoCall,
-                  ),
-                const SizedBox(height: 12),
-                if (existingAppointmentType == "Message" ||
-                    existingAppointmentType == null)
-                  _buildAppointmentOption(
-                    title: "Message",
-                    subtitle: "Chat with the doctor for quick queries.",
-                    icon: Icons.chat_bubble_outline,
-                    onTap: () async {
-                      if (chatId != null && chatId!.isNotEmpty) {
-                        _navigateToChat(chatId!);
-                      } else {
-                        String id = await _chatService.getChatId(
-                            widget.doctorId, widget.patientId);
-                        if (id.isNotEmpty) {
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(
+                color: Colors.teal,
+              ),
+            )
+          : Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (hasAcceptedAppointment || hasAcceptedConsultation) ...[
+                    const SizedBox(height: 10),
+                    const Text(
+                      "Your consultation request has been accepted!",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.blue,
+                          fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildOptionCard(
+                      icon: Icons.chat,
+                      title: "Message Doctor",
+                      subtitle: "Chat securely with your doctor",
+                      onTap: () async {
+                        if (chatId != null) {
+                          _navigateToChat(chatId!);
+                        } else {
+                          String id = await _chatService.getChatId(
+                              widget.doctorId, widget.patientId);
                           _navigateToChat(id);
                         }
-                      }
-                    },
-                  ),
-              ])
-            else
-              // Show options for new appointment requests
-              Column(
-                children: [
-                  const Text(
-                    "Select how you want to consult with the doctor:",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 20),
-                  _buildAppointmentOption(
-                    title: "Video Call",
-                    subtitle: "Have a face-to-face consultation.",
-                    icon: Icons.video_call,
-                    onTap: () => _bookAppointment("Video Call"),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildAppointmentOption(
-                    title: "Message",
-                    subtitle: "Chat with the doctor for quick queries.",
-                    icon: Icons.chat_bubble_outline,
-                    onTap: () => _bookAppointment("Message"),
+                      },
+                      color: Colors.teal,
+                    ),
+                    _buildOptionCard(
+                      icon: Icons.video_call,
+                      title: "Start Video Call",
+                      subtitle: "Talk face-to-face with your doctor",
+                      onTap: _startVideoCall,
+                      color: Colors.teal,
+                    ),
+                    _buildOptionCard(
+                      icon: Icons.medical_services,
+                      title: "AI Diagnose",
+                      subtitle: "Analyze brain MRI scans with AI",
+                      onTap: () {
+                        showDialog(
+                          context: context,
+                          builder: (BuildContext context) {
+                            return AlertDialog(
+                              title: const Text('Select Diagnosis Type'),
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  ElevatedButton.icon(
+                                    onPressed: () {
+                                      Navigator.pop(context);
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              BrainTumorDetector(
+                                                  patientId: widget.patientId),
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.medical_services),
+                                    label: const Text('Brain Tumor Detection'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.teal,
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  ElevatedButton.icon(
+                                    onPressed: () {
+                                      Navigator.pop(context);
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              AlzheimerDetector(
+                                                  patientId: widget.patientId),
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.medical_services),
+                                    label: const Text('Alzheimer\'s Detection'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.teal,
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      },
+                      color: Colors.teal,
+                    ),
+                  ] else if (hasPendingRequest) ...[
+                    const Spacer(),
+                    const Icon(Icons.hourglass_top,
+                        size: 60, color: Colors.amber),
+                    const SizedBox(height: 16),
+                    const Text(
+                      "Your consultation request is pending...",
+                      textAlign: TextAlign.center,
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      "You will be notified once the doctor accepts your request.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 15, color: Colors.grey),
+                    ),
+                    const Spacer(),
+                  ] else ...[
+                    const Spacer(),
+                    const Text(
+                      "Request a consultation",
+                      textAlign: TextAlign.center,
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.medical_services),
+                      label: const Text("Request Consultation"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.teal,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                      onPressed: _sendConsultationRequest,
+                    ),
+                    const Spacer(),
+                  ],
+                  ElevatedButton.icon(
+                    icon:
+                        const Icon(Icons.cancel_outlined, color: Colors.white),
+                    label: const Text(
+                      "Cancel",
+                      style: TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.redAccent,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () => Navigator.pop(context),
                   ),
                 ],
               ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-              ),
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.cancel, color: Colors.white),
-              label: const Text(
-                "Cancel",
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold),
-              ),
             ),
-          ],
-        ),
-      ),
     );
   }
 }

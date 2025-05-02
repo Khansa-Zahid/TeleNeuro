@@ -756,7 +756,7 @@ class _BrainTumorDetectorState extends State<BrainTumorDetector> {
                           icon: const Icon(Icons.search),
                           label: const Text('Analyze'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.deepPurple,
+                            backgroundColor: Colors.teal[600],
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8)),
