@@ -6,6 +6,7 @@ import 'chat_service.dart';
 import 'video_call_screen.dart';
 import 'brain_tumor_detector.dart';
 import 'alzheimer_detector.dart';
+import 'multiple_sclerosis_detector.dart';
 
 class AppointmentTypeScreen extends StatefulWidget {
   final String patientId;
@@ -338,6 +339,31 @@ class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
                                     },
                                     icon: const Icon(Icons.medical_services),
                                     label: const Text('Alzheimer\'s Detection'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.teal,
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  ElevatedButton.icon(
+                                    onPressed: () {
+                                      Navigator.pop(context);
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              MultipleSclerosisDetector(
+                                                  patientId: widget.patientId),
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.medical_services),
+                                    label: const Text(
+                                        'Multiple Sclerosis Detection'),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.teal,
                                       padding: const EdgeInsets.symmetric(

@@ -104,6 +104,7 @@ flutter:
     - lib/assets/images/companion.png
     - lib/assets/Brain_Tumor_Model.tflite
     - lib/assets/alzh_model.tflite
+    - lib/assets/ms_model.tflite
   
 
 
