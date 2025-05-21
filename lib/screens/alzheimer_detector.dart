@@ -11,11 +11,14 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class AlzheimerDetector extends StatefulWidget {
   final String patientId;
+  final String doctorId;
 
-  const AlzheimerDetector({super.key, required this.patientId});
+  const AlzheimerDetector(
+      {super.key, required this.patientId, required this.doctorId});
 
   @override
   _AlzheimerDetectorState createState() => _AlzheimerDetectorState();
@@ -99,9 +102,9 @@ class AlzheimerDetectorModel {
       for (int y = 0; y < 256; y++) {
         for (int x = 0; x < 256; x++) {
           final pixel = resizedImage.getPixel(x, y);
-          inputBuffer[pixelIndex++] = img.getRed(pixel) / 255.0; // R
-          inputBuffer[pixelIndex++] = img.getGreen(pixel) / 255.0; // G
-          inputBuffer[pixelIndex++] = img.getBlue(pixel) / 255.0; // B
+          inputBuffer[pixelIndex++] = (pixel.r) / 255.0;
+          inputBuffer[pixelIndex++] = (pixel.g) / 255.0;
+          inputBuffer[pixelIndex++] = (pixel.b) / 255.0;
         }
       }
 
@@ -277,6 +280,7 @@ class AlzheimerDetectorModel {
 class _AlzheimerDetectorState extends State<AlzheimerDetector> {
   final AlzheimerDetectorModel _detectorModel = AlzheimerDetectorModel();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
   final ImagePicker _imagePicker = ImagePicker();
 
   File? _selectedImage;
@@ -287,17 +291,51 @@ class _AlzheimerDetectorState extends State<AlzheimerDetector> {
   bool _modelLoadingFailed = false;
   String _reportId = '';
   DateTime _analysisTime = DateTime.now();
+  String? _doctorId;
 
   @override
   void initState() {
     super.initState();
+    _doctorId = widget.doctorId;
     _initialize();
+    _checkAssociatedDoctor();
   }
 
   Future<void> _initialize() async {
     await _loadModel();
     await _fetchPatientData();
     _reportId = _generateReportId();
+  }
+
+  Future<void> _checkAssociatedDoctor() async {
+    if (widget.patientId.isEmpty) return;
+
+    try {
+      // Only check for appointments if we don't already have a doctor ID
+      if (_doctorId == null) {
+        QuerySnapshot appointmentSnapshot = await _firestore
+            .collection("appointments")
+            .where("client_id", isEqualTo: widget.patientId)
+            .orderBy("date_time", descending: true)
+            .limit(1)
+            .get();
+
+        if (appointmentSnapshot.docs.isNotEmpty) {
+          Map<String, dynamic> appointmentData =
+              appointmentSnapshot.docs.first.data() as Map<String, dynamic>;
+          setState(() {
+            _doctorId = appointmentData["doctor_id"];
+          });
+          print("Associated doctor ID found from appointment: $_doctorId");
+        } else {
+          print("No associated doctor found for this patient");
+        }
+      } else {
+        print("Using provided doctor ID: $_doctorId");
+      }
+    } catch (e) {
+      print("Error finding associated doctor: $e");
+    }
   }
 
   String _generateReportId() {
@@ -429,7 +467,9 @@ class _AlzheimerDetectorState extends State<AlzheimerDetector> {
 
   Future<void> _saveReportToFirestore() async {
     try {
-      await _firestore.collection('medical_reports').add({
+      // First save basic report data
+      DocumentReference reportRef =
+          await _firestore.collection('medical_reports').add({
         'reportId': _reportId,
         'patientId': widget.patientId,
         'patientName': _patientData?['name'] ?? 'Unknown',
@@ -440,9 +480,64 @@ class _AlzheimerDetectorState extends State<AlzheimerDetector> {
         'confidence': _detectionResult?['confidence'] ?? 0.0,
         'severity': _detectionResult?['severityLevel'] ?? '',
         'imagePath': _selectedImage?.path ?? '',
+        'doctorId': _doctorId,
       });
+
+      // Generate and save PDF to Firebase Storage
+      String pdfUrl = await _generateAndUploadPdf(reportRef.id);
+
+      // Update the report with the PDF URL
+      await reportRef.update({
+        'pdfUrl': pdfUrl,
+      });
+
+      print("Report saved to Firestore with PDF URL: $pdfUrl");
     } catch (e) {
       print("Error saving report: $e");
+    }
+  }
+
+  Future<String> _generateAndUploadPdf(String reportId) async {
+    try {
+      final pdf = pw.Document();
+      final formattedDate = DateFormat('MMMM d, yyyy').format(_analysisTime);
+      final formattedTime = DateFormat('h:mm a').format(_analysisTime);
+
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(32),
+          build: (pw.Context context) => [
+            _buildPdfHeader(formattedDate),
+            _buildPdfPatientInfo(),
+            _buildPdfStudyInfo(formattedDate),
+            _buildPdfFindings(),
+            if (_detectionResult?['diagnosis'] != 'Non Demented')
+              _buildPdfDetailedAnalysis(),
+            _buildPdfRecommendations(),
+            _buildPdfFooter(formattedDate, formattedTime),
+          ],
+        ),
+      );
+
+      // Save PDF to temporary directory first
+      final directory = await getTemporaryDirectory();
+      final fileName = 'Alzheimer_Report_${reportId}.pdf';
+      final filePath = '${directory.path}/$fileName';
+      final file = File(filePath);
+      await file.writeAsBytes(await pdf.save());
+
+      // Upload PDF to Firebase Storage
+      final storageRef =
+          _storage.ref().child('reports/alzheimer_reports/$fileName');
+      final uploadTask = storageRef.putFile(file);
+      final snapshot = await uploadTask.whenComplete(() => null);
+      final downloadUrl = await snapshot.ref.getDownloadURL();
+
+      return downloadUrl;
+    } catch (e) {
+      print('Error generating/uploading PDF: $e');
+      throw e;
     }
   }
 
@@ -474,6 +569,39 @@ class _AlzheimerDetectorState extends State<AlzheimerDetector> {
           'Alzheimer_Report_${DateTime.now().millisecondsSinceEpoch}.pdf';
       final file = File('${directory.path}/$fileName');
       await file.writeAsBytes(await pdf.save());
+
+      // If this is a new report that hasn't been saved to Firestore yet
+      if (widget.patientId.isNotEmpty && _doctorId != null) {
+        try {
+          // Upload to Firebase Storage
+          final storageRef =
+              _storage.ref().child('reports/alzheimer_reports/$fileName');
+          final uploadTask = storageRef.putFile(file);
+          final snapshot = await uploadTask.whenComplete(() => null);
+          final downloadUrl = await snapshot.ref.getDownloadURL();
+
+          // Create a new record in the reports collection
+          await _firestore.collection('medical_reports').add({
+            'reportId': _reportId,
+            'patientId': widget.patientId,
+            'patientName': _patientData?['name'] ?? 'Unknown',
+            'timestamp': _analysisTime,
+            'reportType': 'Alzheimer MRI Analysis',
+            'result': _detectionResult?['formattedResult'] ?? '',
+            'diagnosis': _detectionResult?['diagnosis'] ?? '',
+            'confidence': _detectionResult?['confidence'] ?? 0.0,
+            'severity': _detectionResult?['severityLevel'] ?? '',
+            'pdfUrl': downloadUrl,
+            'doctorId': _doctorId,
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Report saved and shared with doctor')),
+          );
+        } catch (e) {
+          print('Error uploading PDF: $e');
+        }
+      }
 
       await Share.shareXFiles(
         [XFile(file.path)],
@@ -1009,18 +1137,40 @@ class _AlzheimerDetectorState extends State<AlzheimerDetector> {
 
             const SizedBox(height: 16),
 
-            // Download Report Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.download),
-                label: const Text('Download Full Report'),
-                onPressed: _generatePdf,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  backgroundColor: Colors.blue[700],
+            // Report Action Buttons
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _generatePdf,
+                    icon: const Icon(Icons.download_rounded),
+                    label: const Text('Download Report'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue[700],
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _doctorId != null ? _sendReportToDoctor : null,
+                    icon: const Icon(Icons.send_rounded),
+                    label: const Text('Send to Doctor'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green[700],
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      disabledBackgroundColor: Colors.grey,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -1065,6 +1215,94 @@ class _AlzheimerDetectorState extends State<AlzheimerDetector> {
             'consultation and intervention recommended.';
       default:
         return 'Further evaluation by a specialist is recommended.';
+    }
+  }
+
+  Future<void> _sendReportToDoctor() async {
+    setState(() => _isProcessing = true);
+
+    try {
+      if (_doctorId == null) {
+        throw Exception('No doctor associated with this patient');
+      }
+
+      // Generate and upload the PDF
+      final String pdfFileName =
+          'Alzheimer_Report_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final pdf = pw.Document();
+      final formattedDate = DateFormat('MMMM d, yyyy').format(_analysisTime);
+      final formattedTime = DateFormat('h:mm a').format(_analysisTime);
+
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(32),
+          build: (pw.Context context) => [
+            _buildPdfHeader(formattedDate),
+            _buildPdfPatientInfo(),
+            _buildPdfStudyInfo(formattedDate),
+            _buildPdfFindings(),
+            if (_detectionResult?['diagnosis'] != 'Non Demented')
+              _buildPdfDetailedAnalysis(),
+            _buildPdfRecommendations(),
+            _buildPdfFooter(formattedDate, formattedTime),
+          ],
+        ),
+      );
+
+      // Save PDF to temporary directory first
+      final directory = await getTemporaryDirectory();
+      final file = File('${directory.path}/$pdfFileName');
+      await file.writeAsBytes(await pdf.save());
+
+      // Upload to Firebase Storage
+      final storageRef =
+          _storage.ref().child('reports/alzheimer_reports/$pdfFileName');
+      final uploadTask = storageRef.putFile(file);
+      final snapshot = await uploadTask.whenComplete(() => null);
+      final downloadUrl = await snapshot.ref.getDownloadURL();
+
+      // Create a new report document in Firestore
+      DocumentReference reportRef =
+          await _firestore.collection('medical_reports').add({
+        'reportId': _reportId,
+        'patientId': widget.patientId,
+        'patientName': _patientData?['name'] ?? 'Unknown',
+        'timestamp': _analysisTime,
+        'reportType': 'Alzheimer MRI Analysis',
+        'result': _detectionResult?['formattedResult'] ?? '',
+        'diagnosis': _detectionResult?['diagnosis'] ?? '',
+        'confidence': _detectionResult?['confidence'] ?? 0.0,
+        'severity': _detectionResult?['severityLevel'] ?? '',
+        'pdfUrl': downloadUrl,
+        'doctorId': _doctorId,
+        'sentToDoctor': true,
+        'sentDate': FieldValue.serverTimestamp(),
+      });
+
+      // Create a notification for the doctor
+      await _firestore.collection('notifications').add({
+        'receiver_id': _doctorId,
+        'sender_id': widget.patientId,
+        'type': 'medical_report',
+        'title': 'New Alzheimer MRI Analysis Report',
+        'message':
+            'Patient ${_patientData?['name'] ?? 'Unknown'} has sent you an Alzheimer MRI analysis report',
+        'timestamp': FieldValue.serverTimestamp(),
+        'read': false,
+        'report_id': reportRef.id,
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Report successfully sent to doctor')),
+      );
+    } catch (e) {
+      print('Error sending report to doctor: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to send report: $e')),
+      );
+    } finally {
+      setState(() => _isProcessing = false);
     }
   }
 

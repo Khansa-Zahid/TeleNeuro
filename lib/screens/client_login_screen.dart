@@ -156,7 +156,7 @@ class _ClientLoginScreenState extends State<ClientLoginScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.teal[600],
-        title: const Text('Client Login'),
+        title: const Text('Patient Login'),
         centerTitle: true,
         elevation: 4,
       ),

@@ -10,6 +10,8 @@ import 'doctor_prescription_screen.dart';
 import 'select_patient_screen.dart';
 import 'doctor_chats_list_screen.dart';
 import 'chat_service.dart';
+import 'doctor_reports_screen.dart';
+import 'chat_screen.dart';
 
 class DoctorProfileScreen extends StatefulWidget {
   final String doctorId;
@@ -33,7 +35,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     super.initState();
     _updateTime();
     _fetchDoctorName();
-    _fetchNotifications();
+    _setupNotificationsStream();
     _timer =
         Timer.periodic(const Duration(minutes: 1), (timer) => _updateTime());
   }
@@ -64,25 +66,60 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     }
   }
 
-  Future<void> _fetchNotifications() async {
-    try {
-      QuerySnapshot snapshot = await _firestore
-          .collection('notifications')
-          .where('receiver_id', isEqualTo: widget.doctorId)
-          .where('read', isEqualTo: false)
-          .orderBy('timestamp', descending: true)
-          .get();
+  void _setupNotificationsStream() {
+    // Listen for notifications with receiver_id
+    _firestore
+        .collection('notifications')
+        .where('receiver_id', isEqualTo: widget.doctorId)
+        .where('read', isEqualTo: false)
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        setState(() {
+          // Create a Set to track unique notification IDs
+          Set<String> uniqueIds = {};
+          notifications = [];
 
-      setState(() {
-        notifications = snapshot.docs.map((doc) {
-          var data = doc.data() as Map<String, dynamic>;
-          data['id'] = doc.id;
-          return data;
-        }).toList();
-      });
-    } catch (e) {
-      debugPrint("Error fetching notifications: $e");
-    }
+          // Add notifications from receiver_id query
+          for (var doc in snapshot.docs) {
+            var data = doc.data();
+            data['id'] = doc.id;
+            uniqueIds.add(doc.id);
+            notifications.add(data);
+          }
+        });
+      }
+    });
+
+    // Also listen for notifications with client_id
+    _firestore
+        .collection('notifications')
+        .where('client_id', isEqualTo: widget.doctorId)
+        .where('read', isEqualTo: false)
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        setState(() {
+          // Add notifications from client_id query, avoiding duplicates
+          for (var doc in snapshot.docs) {
+            if (!notifications.any((n) => n['id'] == doc.id)) {
+              var data = doc.data();
+              data['id'] = doc.id;
+              notifications.add(data);
+            }
+          }
+          // Sort notifications by timestamp
+          notifications.sort((a, b) {
+            var aTime = a['timestamp'] as Timestamp?;
+            var bTime = b['timestamp'] as Timestamp?;
+            if (aTime == null || bTime == null) return 0;
+            return bTime.compareTo(aTime);
+          });
+        });
+      }
+    });
   }
 
   Future<void> _markAsRead(String docId) async {
@@ -91,10 +128,151 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
           .collection('notifications')
           .doc(docId)
           .update({'read': true});
-      _fetchNotifications();
     } catch (e) {
       debugPrint("Error marking notification as read: $e");
     }
+  }
+
+  void _handleNotificationClick(Map<String, dynamic> notification) {
+    String type = notification['type'] ?? '';
+    switch (type) {
+      case 'message':
+        if (notification['chat_id'] != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => SelectPatientScreen(
+                doctorId: widget.doctorId,
+                isForChat: true,
+              ),
+            ),
+          );
+        }
+        break;
+      case 'consultation_request':
+        if (notification['patient_id'] != null) {
+          _showConsultationRequestDialog(notification);
+        }
+        break;
+      case 'appointment':
+        if (notification['appointment_id'] != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => DoctorAppointmentsScreen(
+                doctorId: widget.doctorId,
+              ),
+            ),
+          );
+        }
+        break;
+      case 'prescription':
+        if (notification['patient_id'] != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => DoctorPrescriptionScreen(
+                doctorId: widget.doctorId,
+                patientId: notification['patient_id'],
+              ),
+            ),
+          );
+        }
+        break;
+      case 'report':
+        if (notification['report_id'] != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => DoctorReportsScreen(
+                doctorId: widget.doctorId,
+              ),
+            ),
+          );
+        }
+        break;
+    }
+  }
+
+  Future<void> _showConsultationRequestDialog(
+      Map<String, dynamic> notification) async {
+    final ChatService chatService = ChatService();
+    String patientId = notification['patient_id'];
+    String patientName = notification['message']
+        .toString()
+        .split(' would like to consult with you')[0];
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Consultation Request from $patientName'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Would you like to accept this consultation request?'),
+              SizedBox(height: 10),
+              Text('Patient: $patientName',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                // Reject request
+                await FirebaseFirestore.instance
+                    .collection('consultation_requests')
+                    .where('doctor_id', isEqualTo: widget.doctorId)
+                    .where('patient_id', isEqualTo: patientId)
+                    .where('status', isEqualTo: 'pending')
+                    .get()
+                    .then((snapshot) {
+                  if (snapshot.docs.isNotEmpty) {
+                    snapshot.docs.first.reference
+                        .update({'status': 'rejected'});
+                  }
+                });
+
+                // Notify patient
+                await FirebaseFirestore.instance
+                    .collection('notifications')
+                    .add({
+                  'receiver_id': patientId,
+                  'sender_id': widget.doctorId,
+                  'title': 'Consultation Request Rejected',
+                  'message': 'Your consultation request was not accepted',
+                  'timestamp': FieldValue.serverTimestamp(),
+                  'read': false,
+                  'type': 'consultation_rejected',
+                });
+              },
+              child: Text('Reject', style: TextStyle(color: Colors.red)),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                // Accept request
+                await FirebaseFirestore.instance
+                    .collection('consultation_requests')
+                    .where('doctor_id', isEqualTo: widget.doctorId)
+                    .where('patient_id', isEqualTo: patientId)
+                    .where('status', isEqualTo: 'pending')
+                    .get()
+                    .then((snapshot) async {
+                  if (snapshot.docs.isNotEmpty) {
+                    String requestId = snapshot.docs.first.id;
+                    await chatService.acceptConsultationRequest(requestId);
+                  }
+                });
+              },
+              child: Text('Accept', style: TextStyle(color: Colors.green)),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _navigateToChatsList() {
@@ -224,7 +402,12 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
           icon: Icons.folder_shared,
           title: "Reports",
           color: Colors.purple,
-          onTap: () {}, // Future feature
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (context) =>
+                    DoctorReportsScreen(doctorId: widget.doctorId)),
+          ),
         ),
         _buildDashboardCard(
           icon: Icons.person,
@@ -362,13 +545,21 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         iconData = Icons.calendar_today;
         iconColor = Colors.orange;
         break;
-      case 'messages':
+      case 'message':
         iconData = Icons.chat;
         iconColor = Colors.green;
         break;
       case 'consultation_request':
         iconData = Icons.medical_services;
         iconColor = Colors.indigo;
+        break;
+      case 'prescription':
+        iconData = Icons.medication;
+        iconColor = Colors.blue;
+        break;
+      case 'report':
+        iconData = Icons.assessment;
+        iconColor = Colors.purple;
         break;
       default:
         iconData = Icons.notifications;
@@ -397,119 +588,12 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
             ),
         ],
       ),
-      trailing: notifType == 'consultation_request'
-          ? TextButton(
-              onPressed: () => _handleConsultationRequest(notification),
-              child: Text('Accept', style: TextStyle(color: Colors.indigo)),
-              style: TextButton.styleFrom(
-                backgroundColor: Colors.indigo.withOpacity(0.1),
-                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              ),
-            )
-          : null,
       onTap: () {
         _markAsRead(notification['id']);
-        // Handle notification action based on type
-        if (notifType == 'appointment_request' &&
-            notification['appointment_id'] != null) {
-          // Navigate to appointment details
-          // Implementation depends on your appointment screen
-        } else if (notifType == 'message' && notification['chat_id'] != null) {
-          // Navigate to chat screen
-          // Implementation depends on your chat screen
-        } else if (notifType == 'consultation_request') {
-          _handleConsultationRequest(notification);
-        }
+        _handleNotificationClick(notification);
         setState(() => isDropdownVisible = false);
       },
     );
-  }
-
-  void _handleConsultationRequest(Map<String, dynamic> notification) async {
-    String? patientId = notification['patient_id'];
-
-    if (patientId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Patient information missing")),
-      );
-      return;
-    }
-
-    try {
-      // Create a ChatService instance
-      final chatService = ChatService();
-
-      // First verify if there's an actual consultation request
-      var requestCheck = await chatService.checkConsultationRequest(
-          widget.doctorId, patientId);
-
-      if (!requestCheck['exists'] || requestCheck['status'] == 'accepted') {
-        _markAsRead(notification['id']);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(requestCheck['status'] == 'accepted'
-                  ? "Request already accepted"
-                  : "No active request found")),
-        );
-        return;
-      }
-
-      // Show loading indicator
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              ),
-              SizedBox(width: 12),
-              Text("Accepting request..."),
-            ],
-          ),
-          duration: Duration(seconds: 1),
-        ),
-      );
-
-      // Accept the consultation request
-      bool success =
-          await chatService.acceptConsultationRequest(requestCheck['id']);
-
-      if (success) {
-        // Mark notification as read
-        _markAsRead(notification['id']);
-
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Consultation request accepted"),
-            backgroundColor: Colors.green,
-          ),
-        );
-
-        // Refresh notifications
-        _fetchNotifications();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Failed to accept request"),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      print("Error handling consultation request: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Error: $e"),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
   }
 
   Widget _buildDrawer() {
@@ -563,6 +647,20 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
             () {
               Navigator.pop(context);
               _navigateToChatsList();
+            },
+          ),
+          _buildDrawerItem(
+            Icons.folder_shared,
+            "Medical Reports",
+            () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      DoctorReportsScreen(doctorId: widget.doctorId),
+                ),
+              );
             },
           ),
           _buildDrawerItem(

@@ -54,6 +54,8 @@ class _SelectPatientScreenState extends State<SelectPatientScreen> {
         QuerySnapshot appointmentSnapshot = await FirebaseFirestore.instance
             .collection('appointments')
             .where('doctor_id', isEqualTo: widget.doctorId)
+            .where('status',
+                isEqualTo: 'accepted') // Only get accepted appointments
             .get();
 
         for (var doc in appointmentSnapshot.docs) {
@@ -65,7 +67,7 @@ class _SelectPatientScreenState extends State<SelectPatientScreen> {
 
             String status = appointmentData['status']?.toString() ?? 'pending';
 
-            // Safely extract timestamp - handle different field names
+            // Safely extract timestamp
             Timestamp interactionTime = Timestamp.now();
             try {
               if (appointmentData.containsKey('appointment_date')) {
@@ -86,7 +88,6 @@ class _SelectPatientScreenState extends State<SelectPatientScreen> {
               }
             } catch (e) {
               print("Error extracting date from appointment: $e");
-              // Use current timestamp as fallback
             }
 
             if (!patientsMap.containsKey(patientId)) {
@@ -111,12 +112,10 @@ class _SelectPatientScreenState extends State<SelectPatientScreen> {
             }
           } catch (docError) {
             print("Error processing appointment document: $docError");
-            // Continue with next document
           }
         }
       } catch (appointmentError) {
         print("Error fetching appointments: $appointmentError");
-        // Continue with other data sources
       }
 
       // 2. Fetch patients with prescriptions
@@ -143,7 +142,6 @@ class _SelectPatientScreenState extends State<SelectPatientScreen> {
               }
             } catch (e) {
               print("Error extracting date from prescription: $e");
-              // Use current timestamp as fallback
             }
 
             if (!patientsMap.containsKey(patientId)) {
@@ -167,12 +165,10 @@ class _SelectPatientScreenState extends State<SelectPatientScreen> {
             }
           } catch (docError) {
             print("Error processing prescription document: $docError");
-            // Continue with next document
           }
         }
       } catch (prescriptionError) {
         print("Error fetching prescriptions: $prescriptionError");
-        // Continue with other data sources
       }
 
       // 3. Fetch active chats if needed
@@ -200,7 +196,6 @@ class _SelectPatientScreenState extends State<SelectPatientScreen> {
                 }
               } catch (e) {
                 print("Error extracting date from chat: $e");
-                // Use current timestamp as fallback
               }
 
               if (!patientsMap.containsKey(patientId)) {
@@ -225,18 +220,15 @@ class _SelectPatientScreenState extends State<SelectPatientScreen> {
               }
             } catch (docError) {
               print("Error processing chat document: $docError");
-              // Continue with next document
             }
           }
         } catch (chatError) {
           print("Error fetching chats: $chatError");
-          // Continue with other data sources
         }
       }
 
-      // Fetch patient details for all collected IDs
+      // Fetch patient details
       List<String> patientIdList = patientsMap.keys.toList();
-
       if (patientIdList.isNotEmpty) {
         for (int i = 0; i < patientIdList.length; i += 10) {
           try {
@@ -264,12 +256,10 @@ class _SelectPatientScreenState extends State<SelectPatientScreen> {
                 }
               } catch (docError) {
                 print("Error processing patient document: $docError");
-                // Continue with next document
               }
             }
           } catch (batchError) {
             print("Error fetching patient batch: $batchError");
-            // Continue with next batch
           }
         }
       }
@@ -295,12 +285,11 @@ class _SelectPatientScreenState extends State<SelectPatientScreen> {
             return bTimestamp.compareTo(aTimestamp);
           } catch (sortError) {
             print("Error during sort comparison: $sortError");
-            return 0; // If comparison fails, consider them equal
+            return 0;
           }
         });
       } catch (sortError) {
         print("Error sorting patients list: $sortError");
-        // Continue with unsorted list
       }
 
       if (mounted) {

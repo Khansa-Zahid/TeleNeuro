@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/notification_service.dart';
 
 class ChatService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -85,9 +86,10 @@ class ChatService {
         'created_at': FieldValue.serverTimestamp(),
       });
 
-      // Add notification for doctor
+      // Add notification for doctor with both receiver_id and client_id
       await _firestore.collection('notifications').add({
         'receiver_id': doctorId,
+        'client_id': doctorId,
         'sender_id': patientId,
         'title': 'New Consultation Request',
         'message': '$patientName would like to consult with you',
@@ -183,18 +185,20 @@ class ChatService {
         'last_sender_id': senderId,
       });
 
-      // Add a notification for the receiver
-      await _firestore.collection('notifications').add({
-        'receiver_id': receiverId,
-        'sender_id': senderId,
-        'title': 'New Message',
-        'message':
-            message.length > 30 ? message.substring(0, 30) + '...' : message,
-        'timestamp': FieldValue.serverTimestamp(),
-        'read': false,
-        'type': 'message',
-        'chat_id': chatId,
-      });
+      // Create notification using NotificationService
+      await NotificationService.createNotification(
+        receiverId: receiverId,
+        title: 'New Message from ${senderName ?? 'Unknown'}',
+        message:
+            message.length > 50 ? message.substring(0, 50) + '...' : message,
+        type: 'message',
+        additionalData: {
+          'chat_id': chatId,
+          'sender_id': senderId,
+          'sender_name': senderName,
+          'sender_role': senderRole,
+        },
+      );
     } catch (e) {
       print("Error sending message: $e");
     }

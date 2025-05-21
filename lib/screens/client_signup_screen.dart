@@ -22,32 +22,37 @@ class _ClientSignupScreenState extends State<ClientSignupScreen> {
   Future<void> _signup() async {
     if (_formKey.currentState!.validate()) {
       try {
-        print("Creating user...");
-        UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+        UserCredential userCredential =
+            await _auth.createUserWithEmailAndPassword(
           email: email,
           password: password,
         );
-        print("User created with UID: ${userCredential.user!.uid}");
 
-        print("Storing client data in Firestore...");
-        await _firestore.collection('clients').doc(userCredential.user!.uid).set({
+        // Send email verification
+        await userCredential.user!.sendEmailVerification();
+
+        await _firestore
+            .collection('clients')
+            .doc(userCredential.user!.uid)
+            .set({
           'name': name,
           'email': email,
           'phoneNumber': phoneNumber,
           'uid': userCredential.user!.uid,
-        }).then((_) {
-          print("✅ Firestore write successful");
-        }).catchError((error) {
-          print("Firestore write failed: $error");
         });
 
+        // Show a message to the user to check their email
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Signup successful!')),
+          const SnackBar(
+            content: Text(
+                'Signup successful! Please check your email for verification.'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 5),
+          ),
         );
 
         Navigator.pushReplacementNamed(context, '/clientLoginScreen');
       } catch (e) {
-        print("Signup Error: $e");
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e')),
         );
@@ -58,58 +63,118 @@ class _ClientSignupScreenState extends State<ClientSignupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Client Signup')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              TextFormField(
-                decoration: const InputDecoration(labelText: 'Name'),
-                onChanged: (value) => name = value,
-                validator: (value) => value!.isEmpty ? 'Please enter your name' : null,
+      backgroundColor: Colors.teal[50],
+      appBar: AppBar(
+        title: const Text('Patient Signup'),
+        backgroundColor: Colors.teal,
+        elevation: 0,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20.0),
+        child: Center(
+          child: Card(
+            elevation: 6,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    const Text(
+                      "Create Your Account",
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.teal,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    TextFormField(
+                      decoration: const InputDecoration(
+                        labelText: 'Full Name',
+                        prefixIcon: Icon(Icons.person),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (value) => name = value,
+                      validator: (value) =>
+                          value!.isEmpty ? 'Please enter your name' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      decoration: const InputDecoration(
+                        labelText: 'Email Address',
+                        prefixIcon: Icon(Icons.email),
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.emailAddress,
+                      onChanged: (value) => email = value,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your email';
+                        }
+                        if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
+                          return 'Enter a valid email address';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      decoration: const InputDecoration(
+                        labelText: 'Phone Number',
+                        prefixIcon: Icon(Icons.phone),
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.phone,
+                      onChanged: (value) => phoneNumber = value,
+                      validator: (value) => value!.isEmpty
+                          ? 'Please enter your phone number'
+                          : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      decoration: const InputDecoration(
+                        labelText: 'Password',
+                        prefixIcon: Icon(Icons.lock),
+                        border: OutlineInputBorder(),
+                      ),
+                      obscureText: true,
+                      onChanged: (value) => password = value,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your password';
+                        }
+                        if (value.length < 6) {
+                          return 'Password must be at least 6 characters long';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _signup,
+                        icon: const Icon(Icons.check),
+                        label: const Text(
+                          'Sign Up',
+                          style: TextStyle(fontSize: 16),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.teal,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              TextFormField(
-                decoration: const InputDecoration(labelText: 'Email'),
-                keyboardType: TextInputType.emailAddress,
-                onChanged: (value) => email = value,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your email';
-                  }
-                  if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
-                    return 'Enter a valid email address';
-                  }
-                  return null;
-                },
-              ),
-              TextFormField(
-                decoration: const InputDecoration(labelText: 'Phone Number'),
-                keyboardType: TextInputType.phone,
-                onChanged: (value) => phoneNumber = value,
-                validator: (value) => value!.isEmpty ? 'Please enter your phone number' : null,
-              ),
-              TextFormField(
-                decoration: const InputDecoration(labelText: 'Password'),
-                obscureText: true,
-                onChanged: (value) => password = value,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your password';
-                  }
-                  if (value.length < 6) {
-                    return 'Password must be at least 6 characters long';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _signup,
-                child: const Text('Sign Up'),
-              ),
-            ],
+            ),
           ),
         ),
       ),

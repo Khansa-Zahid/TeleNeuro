@@ -5,6 +5,7 @@ import 'package:shimmer/shimmer.dart';
 import 'chat_screen.dart';
 import 'video_call_screen.dart';
 import 'chat_service.dart';
+import 'doctor_chat_screen.dart';
 
 class DoctorAppointmentsScreen extends StatefulWidget {
   final String doctorId;
@@ -22,6 +23,13 @@ class _DoctorAppointmentsScreenState extends State<DoctorAppointmentsScreen> {
   DateTime selectedDate = DateTime.now();
   bool isDarkMode = false;
   bool showAllAppointments = false;
+  String _doctorName = "Loading...";
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchDoctorName();
+  }
 
   void _toggleDarkMode() {
     setState(() {
@@ -41,10 +49,30 @@ class _DoctorAppointmentsScreenState extends State<DoctorAppointmentsScreen> {
     });
   }
 
+  Future<void> _fetchDoctorName() async {
+    try {
+      DocumentSnapshot doc =
+          await firestore.collection('doctors').doc(widget.doctorId).get();
+      if (doc.exists && mounted) {
+        setState(() {
+          _doctorName = doc['name'] ?? "Unknown Doctor";
+        });
+      }
+    } catch (e) {
+      print("Error fetching doctor name: $e");
+      if (mounted) {
+        setState(() {
+          _doctorName = "Unknown Doctor";
+        });
+      }
+    }
+  }
+
   Future<List<Map<String, dynamic>>> _fetchAppointments() async {
     QuerySnapshot snapshot = await firestore
         .collection("appointments")
         .where("doctor_id", isEqualTo: widget.doctorId)
+        .orderBy("date_time", descending: true)
         .get();
 
     List<Map<String, dynamic>> appointments = [];
@@ -52,52 +80,52 @@ class _DoctorAppointmentsScreenState extends State<DoctorAppointmentsScreen> {
     for (var doc in snapshot.docs) {
       Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
-      // If there's a date_time field, parse it for filtering
-      DateTime? appointmentDate;
-      if (data["date_time"] != null) {
-        appointmentDate = DateTime.parse(data["date_time"]);
+      // Get client name from client_name field or from clients collection
+      if (!data.containsKey('client_name') && data.containsKey('client_id')) {
+        try {
+          DocumentSnapshot clientSnapshot = await firestore
+              .collection("clients")
+              .doc(data['client_id'])
+              .get();
+
+          var clientData = clientSnapshot.data() as Map<String, dynamic>?;
+          if (clientData != null && clientData.containsKey('name')) {
+            data['client_name'] = clientData['name'];
+          }
+        } catch (e) {
+          print("Error fetching client data: $e");
+        }
       }
 
-      // If showing all appointments or if date matches selected date
-      if (showAllAppointments ||
-          appointmentDate ==
-              null || // Include appointments without dates (like pending requests)
-          (appointmentDate.year == selectedDate.year &&
-              appointmentDate.month == selectedDate.month &&
-              appointmentDate.day == selectedDate.day)) {
-        // Get client name from client_name field or from clients collection
-        if (!data.containsKey('client_name') && data.containsKey('client_id')) {
-          try {
-            DocumentSnapshot clientSnapshot = await firestore
-                .collection("clients")
-                .doc(data['client_id'])
-                .get();
+      // If no client name was found, use a default
+      if (!data.containsKey('client_name')) {
+        data['client_name'] = "Unknown Patient";
+      }
 
-            var clientData = clientSnapshot.data() as Map<String, dynamic>?;
-            if (clientData != null && clientData.containsKey('name')) {
-              data['client_name'] = clientData['name'];
-            }
+      // Format time if available
+      DateTime? appointmentDate;
+      if (data['date_time'] != null) {
+        if (data['date_time'] is Timestamp) {
+          appointmentDate = (data['date_time'] as Timestamp).toDate();
+        } else if (data['date_time'] is String) {
+          try {
+            appointmentDate = DateTime.parse(data['date_time'] as String);
           } catch (e) {
-            print("Error fetching client data: $e");
+            print("Error parsing date_time string: $e");
+            // Handle parsing error, leave appointmentDate as null
           }
         }
-
-        // If no client name was found, use a default
-        if (!data.containsKey('client_name')) {
-          data['client_name'] = "Client";
-        }
-
-        // Format time if available
-        if (appointmentDate != null) {
-          data['formatted_time'] =
-              DateFormat('dd MMM yyyy, hh:mm a').format(appointmentDate);
-        } else {
-          data['formatted_time'] = "Time not specified";
-        }
-
-        data['appointment_id'] = doc.id;
-        appointments.add(data);
       }
+
+      if (appointmentDate != null) {
+        data['formatted_time'] =
+            DateFormat('dd MMM yyyy, hh:mm a').format(appointmentDate);
+      } else {
+        data['formatted_time'] = "Time not specified";
+      }
+
+      data['appointment_id'] = doc.id;
+      appointments.add(data);
     }
     return appointments;
   }
@@ -153,10 +181,11 @@ class _DoctorAppointmentsScreenState extends State<DoctorAppointmentsScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => ChatScreen(
+            builder: (context) => DoctorChatScreen(
               chatId: chatId,
               doctorId: doctorId,
               patientId: patientId,
+              doctorName: _doctorName,
             ),
           ),
         );
@@ -331,81 +360,95 @@ class _DoctorAppointmentsScreenState extends State<DoctorAppointmentsScreen> {
                     final appointmentId = data['appointment_id'] ?? "";
                     final appointmentType =
                         data['appointment_type'] ?? "Unknown";
-                    final clientName = data['client_name'] ?? "Client";
+                    final clientName = data['client_name'] ?? "Unknown Patient";
+                    final formattedTime =
+                        data['formatted_time'] ?? "Time not specified";
 
                     return Card(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                      elevation: 5,
+                      elevation: 4,
                       margin: const EdgeInsets.symmetric(vertical: 8),
-                      child: Column(
-                        children: [
-                          ListTile(
-                            contentPadding: const EdgeInsets.all(16),
-                            title: Text("${appointmentType} with $clientName"),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const SizedBox(height: 5),
-                                Row(
-                                  children: [
-                                    Container(
-                                      padding: EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: _getStatusColor(status),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        status.toUpperCase(),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        clientName,
                                         style: TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold),
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDarkMode
+                                              ? Colors.white
+                                              : Colors.teal[900],
+                                        ),
                                       ),
-                                    ),
-                                    SizedBox(width: 8),
-                                    Icon(Icons.access_time, size: 16),
-                                    SizedBox(width: 4),
-                                    Flexible(
-                                      child: Text(
-                                        data['formatted_time'],
-                                        overflow: TextOverflow.ellipsis,
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        "Type: $appointmentType",
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: isDarkMode
+                                              ? Colors.grey[300]
+                                              : Colors.grey[700],
+                                        ),
                                       ),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: _getStatusColor(status)
+                                        .withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: _getStatusColor(status),
+                                      width: 1,
                                     ),
-                                  ],
+                                  ),
+                                  child: Text(
+                                    status.toUpperCase(),
+                                    style: TextStyle(
+                                      color: _getStatusColor(status),
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
-                          ),
-                          if (status.toLowerCase() == "pending")
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                  bottom: 16, left: 16, right: 16),
-                              child: Row(
+                            const SizedBox(height: 12),
+                            Text(
+                              formattedTime,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: isDarkMode
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600],
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            if (status == "pending")
+                              Row(
                                 mainAxisAlignment: MainAxisAlignment.end,
                                 children: [
                                   ElevatedButton.icon(
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8)),
-                                    ),
-                                    onPressed: () => _updateAppointmentStatus(
-                                        appointmentId, clientId, "accepted"),
-                                    icon: const Icon(Icons.check,
-                                        color: Colors.white),
-                                    label: const Text("Accept",
-                                        style: TextStyle(color: Colors.white)),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  ElevatedButton.icon(
-                                    style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.red,
                                       shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8)),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
                                     ),
                                     onPressed: () => _updateAppointmentStatus(
                                         appointmentId, clientId, "rejected"),
@@ -414,54 +457,60 @@ class _DoctorAppointmentsScreenState extends State<DoctorAppointmentsScreen> {
                                     label: const Text("Reject",
                                         style: TextStyle(color: Colors.white)),
                                   ),
+                                  const SizedBox(width: 8),
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                    onPressed: () => _updateAppointmentStatus(
+                                        appointmentId, clientId, "accepted"),
+                                    icon: const Icon(Icons.check,
+                                        color: Colors.white),
+                                    label: const Text("Accept",
+                                        style: TextStyle(color: Colors.white)),
+                                  ),
                                 ],
-                              ),
-                            ),
-                          if (status.toLowerCase() == "accepted")
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                  bottom: 16, left: 16, right: 16),
-                              child: Row(
+                              )
+                            else if (status == "accepted")
+                              Row(
                                 mainAxisAlignment: MainAxisAlignment.end,
                                 children: [
-                                  if (appointmentType.toLowerCase() ==
-                                      "video call")
-                                    ElevatedButton.icon(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.blue,
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(8)),
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.teal,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
                                       ),
-                                      onPressed: () => _initiateVideoCall(
-                                          widget.doctorId, clientId),
-                                      icon: const Icon(Icons.video_call,
-                                          color: Colors.white),
-                                      label: const Text("Video Call",
-                                          style:
-                                              TextStyle(color: Colors.white)),
                                     ),
-                                  if (appointmentType.toLowerCase() ==
-                                      "message")
-                                    ElevatedButton.icon(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.teal,
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(8)),
+                                    onPressed: () => _initiateChat(
+                                        widget.doctorId, clientId),
+                                    icon: const Icon(Icons.chat,
+                                        color: Colors.white),
+                                    label: const Text("Chat",
+                                        style: TextStyle(color: Colors.white)),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.blue,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
                                       ),
-                                      onPressed: () => _initiateChat(
-                                          widget.doctorId, clientId),
-                                      icon: const Icon(Icons.chat,
-                                          color: Colors.white),
-                                      label: const Text("Chat",
-                                          style:
-                                              TextStyle(color: Colors.white)),
                                     ),
+                                    onPressed: () => _initiateVideoCall(
+                                        widget.doctorId, clientId),
+                                    icon: const Icon(Icons.video_call,
+                                        color: Colors.white),
+                                    label: const Text("Video Call",
+                                        style: TextStyle(color: Colors.white)),
+                                  ),
                                 ],
                               ),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
                     );
                   }).toList(),

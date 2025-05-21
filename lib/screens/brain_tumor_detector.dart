@@ -1,9 +1,11 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image/image.dart' as img;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:intl/intl.dart';
 import 'dart:math' as math;
 import 'package:pdf/pdf.dart';
@@ -11,17 +13,15 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-void main() {
-  runApp(MaterialApp(
-    home: BrainTumorDetector(patientId: ""),
-    debugShowCheckedModeBanner: false,
-  ));
-}
-
 class BrainTumorDetector extends StatefulWidget {
   final String patientId;
+  final String doctorId;
 
-  const BrainTumorDetector({super.key, required this.patientId});
+  const BrainTumorDetector({
+    super.key,
+    required this.patientId,
+    required this.doctorId,
+  });
 
   @override
   _BrainTumorDetectorState createState() => _BrainTumorDetectorState();
@@ -30,79 +30,197 @@ class BrainTumorDetector extends StatefulWidget {
 class BrainTumorDetectorModel {
   static const String MODEL_FILE = 'lib/assets/Brain_Tumor_Model.tflite';
   Interpreter? _interpreter;
+  bool _isModelLoaded = false;
 
   Future<void> loadModel() async {
     try {
-      _interpreter = await Interpreter.fromAsset(MODEL_FILE);
+      print('Starting model loading process...');
+      print('Loading model from: $MODEL_FILE');
+
+      final options = InterpreterOptions();
+
+      try {
+        if (Platform.isAndroid || Platform.isIOS) {
+          options.addDelegate(XNNPackDelegate());
+          print('XNNPACK delegate added successfully');
+        }
+      } catch (e) {
+        print('XNNPACK not available: $e');
+      }
+
+      _interpreter = await Interpreter.fromAsset(MODEL_FILE, options: options);
+
+      if (_interpreter == null) {
+        throw Exception('Failed to initialize model interpreter');
+      }
+
+      _isModelLoaded = true;
       print('Model loaded successfully');
+
+      final inputShape = _interpreter!.getInputTensor(0).shape;
+      final outputShape = _interpreter!.getOutputTensor(0).shape;
+      print('Model input shape: $inputShape');
+      print('Model output shape: $outputShape');
     } catch (e) {
+      _isModelLoaded = false;
       print('Failed to load model: $e');
+      rethrow;
     }
   }
 
-  Future<List<List<List<List<double>>>>> preprocessImage(File imageFile) async {
-    img.Image? originalImage = img.decodeImage(await imageFile.readAsBytes());
-    if (originalImage == null) throw Exception('Failed to decode image');
+  Future<List<dynamic>> preprocessImage(File imageFile) async {
+    if (!_isModelLoaded || _interpreter == null) {
+      throw Exception('Model not loaded. Please load the model first.');
+    }
 
-    // Resize image to 256x256 (as required by model)
-    img.Image resizedImage =
-        img.copyResize(originalImage, width: 256, height: 256);
+    try {
+      print('Starting image preprocessing...');
+      final imageBytes = await imageFile.readAsBytes();
+      img.Image? originalImage = img.decodeImage(imageBytes);
 
-    // Convert to tensor (1, 256, 256, 3)
-    List<List<List<List<double>>>> inputImage = List.generate(
-      1, // Batch size
-      (_) => List.generate(
-        256,
-        (y) => List.generate(
-          256,
-          (x) {
-            int pixel = resizedImage.getPixel(x, y);
-            return [
-              img.getRed(pixel) / 255.0, // Normalize R
-              img.getGreen(pixel) / 255.0, // Normalize G
-              img.getBlue(pixel) / 255.0 // Normalize B
-            ];
-          },
-        ),
-      ),
-    );
+      if (originalImage == null) {
+        throw Exception('Failed to decode image');
+      }
 
-    return inputImage;
+      print(
+          'Original image size: ${originalImage.width}x${originalImage.height}');
+
+      img.Image resizedImage = img.copyResize(
+        originalImage,
+        width: 256,
+        height: 256,
+        interpolation: img.Interpolation.cubic,
+      );
+
+      print('Image resized to: ${resizedImage.width}x${resizedImage.height}');
+
+      final inputBuffer = Float32List(1 * 256 * 256 * 3);
+      int pixelIndex = 0;
+
+      for (int y = 0; y < 256; y++) {
+        for (int x = 0; x < 256; x++) {
+          final pixel = resizedImage.getPixel(x, y);
+          inputBuffer[pixelIndex++] = (pixel.r) / 255.0;
+          inputBuffer[pixelIndex++] = (pixel.g) / 255.0;
+          inputBuffer[pixelIndex++] = (pixel.b) / 255.0;
+        }
+      }
+
+      print('Image preprocessing completed successfully');
+      return inputBuffer.reshape([1, 256, 256, 3]);
+    } catch (e) {
+      print('Image preprocessing failed: $e');
+      rethrow;
+    }
   }
 
   Future<Map<String, dynamic>> detectTumor(File imageFile) async {
-    if (_interpreter == null) throw Exception('Model not loaded');
+    if (!_isModelLoaded || _interpreter == null) {
+      throw Exception('Model not loaded or initialized');
+    }
 
-    List<List<List<List<double>>>> inputImage =
-        await preprocessImage(imageFile);
+    try {
+      print('Starting tumor detection...');
+      final inputImage = await preprocessImage(imageFile);
 
-    // Define output tensor for binary classification (1, 2)
-    final outputTensor = List.filled(1 * 2, 0.0).reshape([1, 2]);
+      final outputShape = _interpreter!.getOutputTensor(0).shape;
+      print('Output shape from interpreter: $outputShape');
 
-    _interpreter?.run(inputImage, outputTensor);
+      var outputBuffer = List.generate(
+        outputShape[0],
+        (index) => List<double>.filled(outputShape[1], 0.0),
+      );
 
-    double tumorProbability = outputTensor[0][1];
-    double confidence =
-        tumorProbability > 0.5 ? tumorProbability : 1 - tumorProbability;
+      print('Running inference...');
+      _interpreter!.run(inputImage, outputBuffer);
 
-    return {
-      'isTumor': tumorProbability > 0.5,
-      'probability': tumorProbability,
-      'confidence': confidence,
-      'formattedResult': tumorProbability > 0.5
-          ? 'Tumor Detected (${(tumorProbability * 100).toStringAsFixed(2)}% confidence)'
-          : 'No Tumor Detected (${((1 - tumorProbability) * 100).toStringAsFixed(2)}% confidence)',
-    };
+      final List<double> probabilities = outputBuffer[0];
+      print('Raw probabilities: $probabilities');
+
+      double tumorProbability = probabilities[1];
+      double confidence =
+          tumorProbability > 0.5 ? tumorProbability : 1 - tumorProbability;
+
+      return {
+        'isTumor': tumorProbability > 0.5,
+        'probability': tumorProbability,
+        'confidence': confidence,
+        'formattedResult': tumorProbability > 0.5
+            ? 'Tumor Detected (${(tumorProbability * 100).toStringAsFixed(2)}% confidence)'
+            : 'No Tumor Detected (${((1 - tumorProbability) * 100).toStringAsFixed(2)}% confidence)',
+        'severityLevel': _determineSeverityLevel(tumorProbability),
+        'tumorDescription': _analyzeTumorPattern(tumorProbability),
+        'clinicalImpact': _assessClinicalImpact(tumorProbability),
+        'recommendedTests': _recommendFollowUpTests(tumorProbability),
+      };
+    } catch (e) {
+      print('Detection failed: $e');
+      print('Stack trace: ${StackTrace.current}');
+      rethrow;
+    }
+  }
+
+  String _determineSeverityLevel(double probability) {
+    if (probability > 0.85) return "Severe";
+    if (probability > 0.7) return "Moderate";
+    if (probability > 0.5) return "Mild";
+    return "Minimal";
+  }
+
+  String _analyzeTumorPattern(double probability) {
+    if (probability > 0.85) {
+      return "Large tumor mass with significant mass effect";
+    } else if (probability > 0.7) {
+      return "Moderate-sized tumor with some mass effect";
+    } else if (probability > 0.5) {
+      return "Small tumor with minimal mass effect";
+    }
+    return "No significant tumor mass detected";
+  }
+
+  String _assessClinicalImpact(double probability) {
+    if (probability > 0.85) {
+      return "Severe symptoms with significant functional impairment";
+    } else if (probability > 0.7) {
+      return "Moderate symptoms affecting daily activities";
+    } else if (probability > 0.5) {
+      return "Mild symptoms, minimal functional impact";
+    }
+    return "No significant clinical impact detected";
+  }
+
+  List<String> _recommendFollowUpTests(double probability) {
+    final baseTests = [
+      "Neurological examination",
+      "MRI with contrast",
+      "CT scan"
+    ];
+
+    if (probability > 0.5) {
+      baseTests.addAll(["Biopsy", "PET scan", "Blood tests"]);
+    }
+
+    return baseTests;
   }
 
   void close() {
-    _interpreter?.close();
+    try {
+      if (_interpreter != null) {
+        _interpreter!.close();
+        _interpreter = null;
+        _isModelLoaded = false;
+        print('Model resources released successfully');
+      }
+    } catch (e) {
+      print('Error while closing model: $e');
+    }
   }
 }
 
 class _BrainTumorDetectorState extends State<BrainTumorDetector> {
   final BrainTumorDetectorModel _detectorModel = BrainTumorDetectorModel();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
 
   File? _selectedImage;
   Map<String, dynamic>? _detectionResult;
@@ -111,6 +229,7 @@ class _BrainTumorDetectorState extends State<BrainTumorDetector> {
   bool _isLoadingPatient = true;
   String _reportId = '';
   DateTime _analysisTime = DateTime.now();
+  bool _reportSent = false;
 
   // Generate a unique report ID
   String _generateReportId() {
@@ -256,6 +375,92 @@ class _BrainTumorDetectorState extends State<BrainTumorDetector> {
     }
   }
 
+  Future<void> _sendReportToDoctor() async {
+    setState(() => _isProcessing = true);
+
+    try {
+      // Generate and upload the PDF
+      final String pdfFileName =
+          'Brain_Tumor_Report_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final pdf = pw.Document();
+      final formattedDate = DateFormat('MMMM d, yyyy').format(_analysisTime);
+      final formattedTime = DateFormat('h:mm a').format(_analysisTime);
+
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(32),
+          build: (pw.Context context) => [
+            _buildPdfHeader(formattedDate),
+            _buildPdfPatientInfo(),
+            _buildPdfStudyInfo(formattedDate),
+            _buildPdfFindings(),
+            _buildPdfDetailedAnalysis(),
+            _buildPdfRecommendations(),
+            _buildPdfFooter(formattedDate, formattedTime),
+          ],
+        ),
+      );
+
+      // Save PDF to temporary directory first
+      final directory = await getTemporaryDirectory();
+      final file = File('${directory.path}/$pdfFileName');
+      await file.writeAsBytes(await pdf.save());
+
+      // Upload to Firebase Storage
+      final storageRef =
+          _storage.ref().child('reports/brain_tumor_reports/$pdfFileName');
+      final uploadTask = storageRef.putFile(file);
+      final snapshot = await uploadTask.whenComplete(() => null);
+      final downloadUrl = await snapshot.ref.getDownloadURL();
+
+      // Create a new report document in Firestore
+      DocumentReference reportRef =
+          await _firestore.collection('medical_reports').add({
+        'reportId': _reportId,
+        'patientId': widget.patientId,
+        'patientName': _patientData?['name'] ?? 'Unknown',
+        'timestamp': _analysisTime,
+        'reportType': 'Brain MRI Analysis',
+        'result': _detectionResult?['formattedResult'] ?? '',
+        'diagnosis': _detectionResult?['isTumor']
+            ? 'Tumor Detected'
+            : 'No Tumor Detected',
+        'confidence': _detectionResult?['confidence'] ?? 0.0,
+        'severity': _detectionResult?['severityLevel'] ?? '',
+        'pdfUrl': downloadUrl,
+        'doctorId': widget.doctorId,
+        'sentToDoctor': true,
+        'sentDate': FieldValue.serverTimestamp(),
+      });
+
+      // Create a notification for the doctor
+      await _firestore.collection('notifications').add({
+        'receiver_id': widget.doctorId,
+        'sender_id': widget.patientId,
+        'type': 'medical_report',
+        'title': 'New Brain MRI Analysis Report',
+        'message':
+            'Patient ${_patientData?['name'] ?? 'Unknown'} has sent you a Brain MRI analysis report',
+        'timestamp': FieldValue.serverTimestamp(),
+        'read': false,
+        'report_id': reportRef.id,
+      });
+
+      setState(() => _reportSent = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Report successfully sent to doctor')),
+      );
+    } catch (e) {
+      print('Error sending report to doctor: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to send report: $e')),
+      );
+    } finally {
+      setState(() => _isProcessing = false);
+    }
+  }
+
   // Add a new method for generating and saving PDF
   Future<void> _generatePdf() async {
     try {
@@ -278,8 +483,7 @@ class _BrainTumorDetectorState extends State<BrainTumorDetector> {
       String densityDescription =
           isTumor ? _determineDensity(confidence) : "N/A";
       String sizeMeasurement = isTumor ? _estimateTumorSize() : "N/A";
-      List<String> recommendedTests =
-          _recommendFollowUpTests(isTumor, confidence);
+      List<String> recommendedTests = _recommendFollowUpTests(confidence);
 
       // Add content to PDF
       pdf.addPage(
@@ -587,7 +791,281 @@ class _BrainTumorDetectorState extends State<BrainTumorDetector> {
     }
   }
 
-  // Helper methods for PDF report - these will only be used for the downloadable PDF report
+  // PDF Building Methods
+  pw.Widget _buildPdfHeader(String formattedDate) {
+    return pw.Container(
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(
+            'NEUROLOGICAL IMAGING REPORT',
+            style: pw.TextStyle(
+              fontSize: 20,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.teal,
+            ),
+          ),
+          pw.Text(
+            'Report ID: $_reportId',
+            style: pw.TextStyle(fontSize: 10, color: PdfColors.grey),
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildPdfPatientInfo() {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          'PATIENT INFORMATION',
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16),
+        ),
+        pw.SizedBox(height: 5),
+        _buildPdfInfoRow('Name:', _patientData?['name'] ?? 'Not available'),
+        _buildPdfInfoRow('ID:', widget.patientId),
+        _buildPdfInfoRow('Age:', '${_patientData?['age'] ?? 'Not available'}'),
+        _buildPdfInfoRow('Gender:', _patientData?['gender'] ?? 'Not available'),
+        _buildPdfInfoRow(
+            'Blood Group:', _patientData?['bloodGroup'] ?? 'Not available'),
+      ],
+    );
+  }
+
+  pw.Widget _buildPdfStudyInfo(String formattedDate) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          'STUDY INFORMATION',
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16),
+        ),
+        pw.SizedBox(height: 8),
+        pw.Container(
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(
+            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+            border: pw.Border.all(color: PdfColors.grey300),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              _buildPdfInfoRow('Study Type:', 'Brain MRI Analysis'),
+              _buildPdfInfoRow('Scan Region:', 'Cranial Cavity'),
+              _buildPdfInfoRow('Image Quality:', 'Diagnostic Quality'),
+              _buildPdfInfoRow('Date of Image:', formattedDate),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _buildPdfFindings() {
+    bool isTumor = _detectionResult?['isTumor'] ?? false;
+    double confidence = _detectionResult?['confidence'] ?? 0;
+    String confidenceStr = (confidence * 100).toStringAsFixed(2);
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          'FINDINGS',
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16),
+        ),
+        pw.SizedBox(height: 8),
+        pw.Container(
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(
+            color: isTumor ? PdfColors.red50 : PdfColors.green50,
+            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+            border: pw.Border.all(
+              color: isTumor ? PdfColors.red300 : PdfColors.green300,
+            ),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                isTumor ? 'ABNORMAL FINDINGS DETECTED' : 'NO ABNORMAL FINDINGS',
+                style: pw.TextStyle(
+                  fontSize: 14,
+                  fontWeight: pw.FontWeight.bold,
+                  color: isTumor ? PdfColors.red : PdfColors.green,
+                ),
+              ),
+              pw.SizedBox(height: 10),
+              pw.Text(
+                isTumor
+                    ? 'Brain MRI analysis indicates the presence of a potential anomalous mass consistent with neoplastic tissue. The AI analysis detected features characteristic of a brain tumor with $confidenceStr% confidence level.'
+                    : 'Brain MRI analysis shows no evidence of neoplastic tissue or abnormal masses. Normal brain structure and tissue integrity appear preserved based on AI analysis with $confidenceStr% confidence level.',
+                style: const pw.TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _buildPdfDetailedAnalysis() {
+    bool isTumor = _detectionResult?['isTumor'] ?? false;
+    double confidence = _detectionResult?['confidence'] ?? 0;
+    String tumorType = isTumor ? _determineTumorType(confidence) : "N/A";
+    String locationDescription = isTumor ? _analyzeTumorLocation() : "N/A";
+    String severityLevel =
+        isTumor ? _determineSeverityLevel(confidence) : "N/A";
+    String densityDescription = isTumor ? _determineDensity(confidence) : "N/A";
+    String sizeMeasurement = isTumor ? _estimateTumorSize() : "N/A";
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          'TUMOR CHARACTERIZATION',
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16),
+        ),
+        pw.SizedBox(height: 8),
+        pw.Container(
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(
+            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+            border: pw.Border.all(color: PdfColors.grey300),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              _buildPdfDetailRow('Suspected Type:', tumorType),
+              _buildPdfDetailRow('Location:', locationDescription),
+              _buildPdfDetailRow('Estimated Size:', sizeMeasurement),
+              _buildPdfDetailRow('Tissue Density:', densityDescription),
+              _buildPdfDetailRow('Severity Indicator:', severityLevel),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _buildPdfRecommendations() {
+    bool isTumor = _detectionResult?['isTumor'] ?? false;
+    double confidence = _detectionResult?['confidence'] ?? 0;
+    List<String> recommendedTests = _recommendFollowUpTests(confidence);
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          'RECOMMENDATIONS',
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16),
+        ),
+        pw.SizedBox(height: 8),
+        pw.Container(
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(
+            color: PdfColors.blue50,
+            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+            border: pw.Border.all(color: PdfColors.blue300),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                isTumor
+                    ? 'Based on the AI analysis, this case warrants further clinical evaluation by a neurologist or neurosurgeon. The finding shows characteristics consistent with ${_determineTumorType(confidence)}, which requires additional diagnostic confirmation and treatment planning.'
+                    : 'Based on the AI analysis, no significant abnormalities were detected. Recommend routine follow-up as per standard clinical protocols for the patient\'s age and risk factors.',
+                style: const pw.TextStyle(fontSize: 12),
+              ),
+              pw.SizedBox(height: 10),
+              if (isTumor) ...[
+                pw.Text(
+                  'Suggested Follow-up Tests:',
+                  style: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold, fontSize: 12),
+                ),
+                pw.SizedBox(height: 5),
+                ...recommendedTests.map((test) => pw.Padding(
+                      padding: const pw.EdgeInsets.only(left: 10, bottom: 4),
+                      child: pw.Row(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Container(
+                            width: 4,
+                            height: 4,
+                            margin: const pw.EdgeInsets.only(top: 3, right: 5),
+                            decoration: const pw.BoxDecoration(
+                              color: PdfColors.blue,
+                              shape: pw.BoxShape.circle,
+                            ),
+                          ),
+                          pw.Expanded(
+                            child: pw.Text(test,
+                                style: const pw.TextStyle(fontSize: 10)),
+                          ),
+                        ],
+                      ),
+                    )),
+              ],
+              pw.SizedBox(height: 10),
+              pw.Text(
+                'DISCLAIMER: This is an AI-assisted analysis and should not be considered a final medical diagnosis. All findings require verification by a qualified healthcare professional.',
+                style: pw.TextStyle(
+                  fontStyle: pw.FontStyle.italic,
+                  fontSize: 8,
+                  color: PdfColors.grey,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _buildPdfFooter(String formattedDate, String formattedTime) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(10),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.teal50,
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+      ),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'Analyzed by:',
+                style:
+                    pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+              ),
+              pw.Text(
+                'TeleNeuro AI Diagnostic System v2.1',
+                style: const pw.TextStyle(fontSize: 10),
+              ),
+            ],
+          ),
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.end,
+            children: [
+              pw.Text(
+                'Report generated:',
+                style:
+                    pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+              ),
+              pw.Text(
+                '$formattedDate, $formattedTime',
+                style: const pw.TextStyle(fontSize: 10),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   pw.Widget _buildPdfInfoRow(String label, String value) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 2),
@@ -924,6 +1402,60 @@ class _BrainTumorDetectorState extends State<BrainTumorDetector> {
                 ),
               ),
             ),
+
+            if (!_reportSent) ...[
+              const SizedBox(height: 12),
+              // Send to Doctor Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _isProcessing ? null : _sendReportToDoctor,
+                  icon: _isProcessing
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Icon(Icons.send_rounded),
+                  label: Text(
+                      _isProcessing ? 'Sending...' : 'Send Report to Doctor'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.teal[700],
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    disabledBackgroundColor: Colors.grey,
+                  ),
+                ),
+              ),
+            ] else ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.withOpacity(0.3)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.green, size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Report has been sent to your doctor',
+                        style: TextStyle(fontSize: 12, color: Colors.green),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -966,14 +1498,11 @@ class _BrainTumorDetectorState extends State<BrainTumorDetector> {
     return locationOptions[random.nextInt(locationOptions.length)];
   }
 
-  String _determineSeverityLevel(double confidence) {
-    if (confidence > 0.85) {
-      return "high-grade";
-    } else if (confidence > 0.7) {
-      return "intermediate-grade";
-    } else {
-      return "low-grade";
-    }
+  String _determineSeverityLevel(double probability) {
+    if (probability > 0.85) return "Severe";
+    if (probability > 0.7) return "Moderate";
+    if (probability > 0.5) return "Mild";
+    return "Minimal";
   }
 
   String _determineDensity(double confidence) {
@@ -999,37 +1528,18 @@ class _BrainTumorDetectorState extends State<BrainTumorDetector> {
     return "$diameter cm diameter, approximately $volume cm³";
   }
 
-  List<String> _recommendFollowUpTests(bool isTumor, double confidence) {
-    if (!isTumor) {
-      return [
-        "Standard follow-up MRI in 12 months",
-        "Routine neurological examination"
-      ];
-    }
-
-    List<String> recommendations = [
-      "Contrast-enhanced MRI for better visualization",
-      "Neurosurgical consultation",
-      "Stereotactic biopsy for histopathological confirmation"
+  List<String> _recommendFollowUpTests(double probability) {
+    final baseTests = [
+      "Neurological examination",
+      "MRI with contrast",
+      "CT scan"
     ];
 
-    // Add additional recommendations based on confidence level
-    if (confidence > 0.8) {
-      recommendations.add("Emergency neurosurgical evaluation");
-      recommendations
-          .add("Pre-surgical functional MRI to map critical brain areas");
+    if (probability > 0.5) {
+      baseTests.addAll(["Biopsy", "PET scan", "Blood tests"]);
     }
 
-    if (confidence > 0.7) {
-      recommendations.add("MR Spectroscopy to analyze tissue metabolism");
-      recommendations
-          .add("Diffusion Tensor Imaging (DTI) to assess white matter tracts");
-    }
-
-    recommendations
-        .add("Complete blood count and comprehensive metabolic panel");
-
-    return recommendations;
+    return baseTests;
   }
 
   @override

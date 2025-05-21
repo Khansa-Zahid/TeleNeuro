@@ -7,6 +7,7 @@ import 'video_call_screen.dart';
 import 'brain_tumor_detector.dart';
 import 'alzheimer_detector.dart';
 import 'multiple_sclerosis_detector.dart';
+import 'firestore_service.dart';
 
 class AppointmentTypeScreen extends StatefulWidget {
   final String patientId;
@@ -32,94 +33,76 @@ class AppointmentTypeScreen extends StatefulWidget {
 
 class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
   final ChatService _chatService = ChatService();
+  final FirestoreService _firestoreService = FirestoreService();
   String? chatId;
-  bool hasAcceptedAppointment = false;
-  String? existingAppointmentType;
-
   bool _isLoading = false;
-  Map<String, dynamic> _consultationRequestData = {
-    'exists': false,
-    'status': 'none'
-  };
+  String _consultationAppointmentStatus =
+      'none'; // Tracks status in appointments collection
 
   @override
   void initState() {
     super.initState();
     _initializeChat();
-    _checkExistingAppointments();
-    _checkConsultationRequest();
+    _checkConsultationAppointmentStatus(); // Check status of the consultation appointment
   }
 
-  Future<void> _checkConsultationRequest() async {
+  Future<void> _checkConsultationAppointmentStatus() async {
     setState(() => _isLoading = true);
-
     try {
-      var result = await _chatService.checkConsultationRequest(
-          widget.doctorId, widget.patientId);
-      setState(() {
-        _consultationRequestData = result;
-        _isLoading = false;
-      });
-    } catch (e) {
-      print("Error checking consultation request: $e");
-      setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _sendConsultationRequest() async {
-    setState(() => _isLoading = true);
-
-    try {
-      bool result = await _chatService.createConsultationRequest(
-        widget.doctorId,
-        widget.patientId,
-        widget.patientName,
-      );
-      setState(() {
-        _consultationRequestData = {
-          'exists': true,
-          'status': result ? 'accepted' : 'pending'
-        };
-        _isLoading = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(result
-            ? "Consultation request accepted!"
-            : "Consultation request sent! Please wait for doctor to accept."),
-        backgroundColor: result ? Colors.green : Colors.orangeAccent,
-      ));
-    } catch (e) {
-      print("Error sending consultation request: $e");
-      setState(() => _isLoading = false);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error sending request: $e")),
-      );
-    }
-  }
-
-  Future<void> _checkExistingAppointments() async {
-    try {
-      final firestore = FirebaseFirestore.instance;
-      final existingAppointments = await firestore
+      final appointmentSnapshot = await FirebaseFirestore.instance
           .collection("appointments")
           .where("client_id", isEqualTo: widget.patientId)
           .where("doctor_id", isEqualTo: widget.doctorId)
-          .where("status", isEqualTo: "accepted")
+          .where("appointment_type", isEqualTo: "Consultation Request")
+          .limit(1)
           .get();
 
-      if (existingAppointments.docs.isNotEmpty) {
-        var appointmentData =
-            existingAppointments.docs.first.data() as Map<String, dynamic>;
+      if (appointmentSnapshot.docs.isNotEmpty) {
+        final data =
+            appointmentSnapshot.docs.first.data() as Map<String, dynamic>;
         setState(() {
-          hasAcceptedAppointment = true;
-          existingAppointmentType =
-              appointmentData['appointment_type'] as String?;
+          _consultationAppointmentStatus = data['status'] ?? 'none';
+        });
+      } else {
+        setState(() {
+          _consultationAppointmentStatus = 'none';
         });
       }
     } catch (e) {
-      print("Error checking existing appointments: $e");
+      print("Error checking consultation appointment status: $e");
+      setState(() {
+        _consultationAppointmentStatus =
+            'error'; // Handle error state if needed
+      });
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _sendConsultationAppointmentRequest() async {
+    setState(() => _isLoading = true);
+    try {
+      // Use the bookAppointment method to create an appointment with type 'Consultation Request'
+      await _firestoreService.bookAppointment(
+        widget.patientId,
+        widget.doctorId,
+        appointmentType: "Consultation Request",
+      );
+
+      // Refresh the status after sending the request
+      await _checkConsultationAppointmentStatus();
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+            "Consultation request sent! Please wait for doctor to accept."),
+        backgroundColor: Colors.orangeAccent,
+      ));
+    } catch (e) {
+      print("Error sending consultation appointment request: $e");
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error sending request: $e")),
+      );
     }
   }
 
@@ -156,6 +139,42 @@ class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
         builder: (context) => VideoCallScreen(
           doctorId: widget.doctorId,
           patientId: widget.patientId,
+        ),
+      ),
+    );
+  }
+
+  void _navigateToBrainTumorDetector() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => BrainTumorDetector(
+          patientId: widget.patientId,
+          doctorId: widget.doctorId,
+        ),
+      ),
+    );
+  }
+
+  void _navigateToAlzheimerDetector() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AlzheimerDetector(
+          patientId: widget.patientId,
+          doctorId: widget.doctorId,
+        ),
+      ),
+    );
+  }
+
+  void _navigateToMultipleSclerosisDetector() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MultipleSclerosisDetector(
+          patientId: widget.patientId,
+          doctorId: widget.doctorId,
         ),
       ),
     );
@@ -222,223 +241,126 @@ class _AppointmentTypeScreenState extends State<AppointmentTypeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    bool hasPendingRequest = _consultationRequestData['status'] == 'pending';
-    bool hasAcceptedConsultation =
-        _consultationRequestData['status'] == 'accepted';
-
     return Scaffold(
-      backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        backgroundColor: Colors.teal,
-        elevation: 4,
-        title: Text(
-          hasAcceptedAppointment || hasAcceptedConsultation
-              ? "Contact Doctor"
-              : "Consult with Doctor",
-          style:
-              const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
+        title: Text("Book Appointment"),
+        backgroundColor: Colors.teal.shade700,
+        elevation: 0,
       ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(
-                color: Colors.teal,
-              ),
-            )
-          : Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (hasAcceptedAppointment || hasAcceptedConsultation) ...[
-                    const SizedBox(height: 10),
-                    const Text(
-                      "Your consultation request has been accepted!",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.blue,
-                          fontWeight: FontWeight.w600),
+          ? Center(child: CircularProgressIndicator(color: Colors.teal))
+          : _consultationAppointmentStatus == 'pending'
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.access_time,
+                            size: 80, color: Colors.orange.shade400),
+                        SizedBox(height: 16),
+                        Text(
+                          "Consultation Request Pending",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange.shade700,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          "Your request has been sent to Dr. ${widget.doctorName}. Please wait for them to review and accept it.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 20),
-                    _buildOptionCard(
-                      icon: Icons.chat,
-                      title: "Message Doctor",
-                      subtitle: "Chat securely with your doctor",
-                      onTap: () async {
-                        if (chatId != null) {
-                          _navigateToChat(chatId!);
-                        } else {
-                          String id = await _chatService.getChatId(
-                              widget.doctorId, widget.patientId);
-                          _navigateToChat(id);
-                        }
-                      },
-                      color: Colors.teal,
-                    ),
-                    _buildOptionCard(
-                      icon: Icons.video_call,
-                      title: "Start Video Call",
-                      subtitle: "Talk face-to-face with your doctor",
-                      onTap: _startVideoCall,
-                      color: Colors.teal,
-                    ),
-                    _buildOptionCard(
-                      icon: Icons.medical_services,
-                      title: "AI Diagnose",
-                      subtitle: "Analyze brain MRI scans with AI",
-                      onTap: () {
-                        showDialog(
-                          context: context,
-                          builder: (BuildContext context) {
-                            return AlertDialog(
-                              title: const Text('Select Diagnosis Type'),
-                              content: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  ElevatedButton.icon(
-                                    onPressed: () {
-                                      Navigator.pop(context);
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              BrainTumorDetector(
-                                                  patientId: widget.patientId),
-                                        ),
-                                      );
-                                    },
-                                    icon: const Icon(Icons.medical_services),
-                                    label: const Text('Brain Tumor Detection'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.teal,
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 12),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  ElevatedButton.icon(
-                                    onPressed: () {
-                                      Navigator.pop(context);
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              AlzheimerDetector(
-                                                  patientId: widget.patientId),
-                                        ),
-                                      );
-                                    },
-                                    icon: const Icon(Icons.medical_services),
-                                    label: const Text('Alzheimer\'s Detection'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.teal,
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 12),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  ElevatedButton.icon(
-                                    onPressed: () {
-                                      Navigator.pop(context);
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              MultipleSclerosisDetector(
-                                                  patientId: widget.patientId),
-                                        ),
-                                      );
-                                    },
-                                    icon: const Icon(Icons.medical_services),
-                                    label: const Text(
-                                        'Multiple Sclerosis Detection'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.teal,
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 12),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        );
-                      },
-                      color: Colors.teal,
-                    ),
-                  ] else if (hasPendingRequest) ...[
-                    const Spacer(),
-                    const Icon(Icons.hourglass_top,
-                        size: 60, color: Colors.amber),
-                    const SizedBox(height: 16),
-                    const Text(
-                      "Your consultation request is pending...",
-                      textAlign: TextAlign.center,
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      "You will be notified once the doctor accepts your request.",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 15, color: Colors.grey),
-                    ),
-                    const Spacer(),
-                  ] else ...[
-                    const Spacer(),
-                    const Text(
-                      "Request a consultation",
-                      textAlign: TextAlign.center,
-                      style:
-                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.medical_services),
-                      label: const Text("Request Consultation"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
-                      ),
-                      onPressed: _sendConsultationRequest,
-                    ),
-                    const Spacer(),
-                  ],
-                  ElevatedButton.icon(
-                    icon:
-                        const Icon(Icons.cancel_outlined, color: Colors.white),
-                    label: const Text(
-                      "Cancel",
-                      style: TextStyle(color: Colors.white, fontSize: 16),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: () => Navigator.pop(context),
                   ),
-                ],
-              ),
-            ),
+                )
+              : Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: ListView(
+                    children: [
+                      // Option for sending a consultation request (if not already accepted/pending)
+                      if (_consultationAppointmentStatus == 'none' ||
+                          _consultationAppointmentStatus == 'rejected')
+                        _buildOptionCard(
+                          icon: Icons.message,
+                          title: "Send Consultation Request",
+                          subtitle:
+                              "Request a quick consultation via chat or video call",
+                          onTap: _sendConsultationAppointmentRequest,
+                          color: Colors.blueGrey,
+                        ),
+
+                      // Option to go to Chat (if accepted)
+                      if (_consultationAppointmentStatus == 'accepted')
+                        _buildOptionCard(
+                          icon: Icons.chat,
+                          title: "Start Chat Consultation",
+                          subtitle: "Proceed to chat with ${widget.doctorName}",
+                          onTap: () {
+                            if (chatId != null) {
+                              _navigateToChat(chatId!);
+                            } else {
+                              // Handle case where chat ID is not yet available (shouldn't happen with _initializeChat)
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                      content:
+                                          Text("Chat not initialized yet")));
+                            }
+                          },
+                          color: Colors.teal,
+                        ),
+
+                      // Option to start Video Call (if accepted)
+                      if (_consultationAppointmentStatus == 'accepted')
+                        _buildOptionCard(
+                          icon: Icons.video_call,
+                          title: "Start Video Call Consultation",
+                          subtitle:
+                              "Initiate a video call with ${widget.doctorName}",
+                          onTap: _startVideoCall,
+                          color: Colors.redAccent,
+                        ),
+
+                      // AI Detector Options
+                      if (_consultationAppointmentStatus == 'accepted')
+                        Column(
+                          children: [
+                            _buildOptionCard(
+                              icon: Icons.lightbulb_outline,
+                              title: "Brain Tumor Detector",
+                              subtitle:
+                                  "Analyze MRI scans for potential tumors",
+                              onTap: _navigateToBrainTumorDetector,
+                              color: Colors.deepOrangeAccent,
+                            ),
+                            _buildOptionCard(
+                              icon: Icons.memory,
+                              title: "Alzheimer's Detector",
+                              subtitle:
+                                  "Analyze data for potential Alzheimer's signs",
+                              onTap: _navigateToAlzheimerDetector,
+                              color: Colors.blueAccent,
+                            ),
+                            _buildOptionCard(
+                              icon: Icons.scatter_plot,
+                              title: "Multiple Sclerosis Detector",
+                              subtitle:
+                                  "Analyze data for potential Multiple Sclerosis signs",
+                              onTap: _navigateToMultipleSclerosisDetector,
+                              color: Colors.purpleAccent,
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
     );
   }
 }

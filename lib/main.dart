@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'services/notification_service.dart';
-import 'package:fyp_teleneuro/services/notification_service.dart';
+import 'dart:convert';
 
 // Import Screens
 import 'screens/onboarding_screen.dart';
@@ -20,36 +20,86 @@ import 'screens/patient_profile_display_screen.dart';
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
+// Firebase options
+final FirebaseOptions firebaseOptions = FirebaseOptions(
+  apiKey: "AIzaSyDJodDDsyLbb9xvMRRUDNmlhV8EW4hTRis",
+  authDomain: "fypteleneuro.firebaseapp.com",
+  projectId: "fypteleneuro",
+  storageBucket: "fypteleneuro.appspot.com",
+  messagingSenderId: "205605587304",
+  appId: "1:205605587304:web:1a40cedb7f911cc531eedd",
+  measurementId: "G-BTCBSZ9JQS",
+);
+
+// This needs to be a top-level function
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        name: 'SecondaryApp',
+        options: firebaseOptions,
+      );
+    }
+    print('Handling background message: ${message.messageId}');
+  } catch (e) {
+    print('Error in background handler: $e');
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
-    // Initialize Firebase
-    if (kIsWeb) {
+    // Initialize Firebase only if it hasn't been initialized
+    if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp(
-        options: FirebaseOptions(
-          apiKey: "AIzaSyDJodDDsyLbb9xvMRRUDNmlhV8EW4hTRis",
-          authDomain: "fypteleneuro.firebaseapp.com",
-          projectId: "fypteleneuro",
-          storageBucket: "fypteleneuro.firebasestorage.app",
-          messagingSenderId: "205605587304",
-          appId: "1:205605587304:web:1a40cedb7f911cc531eedd",
-          measurementId: "G-BTCBSZ9JQS",
-        ),
+        name: 'PrimaryApp',
+        options: firebaseOptions,
       );
-    } else {
-      await Firebase.initializeApp();
     }
 
-    // Setup Firebase Messaging
-    await setupFirebaseMessaging();
+    // Set background message handler
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+    // Initialize notifications
+    await NotificationService.initializeNotifications();
+
+    // Handle foreground messages
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      print("Received foreground message: ${message.messageId}");
+      // Show local notification
+      if (message.notification != null) {
+        flutterLocalNotificationsPlugin.show(
+          message.hashCode,
+          message.notification!.title,
+          message.notification!.body,
+          NotificationDetails(
+            android: AndroidNotificationDetails(
+              'high_importance_channel',
+              'High Importance Notifications',
+              importance: Importance.high,
+              priority: Priority.high,
+            ),
+          ),
+          payload: jsonEncode(message.data),
+        );
+      }
+    });
+
+    // Handle notification clicks when app is in background
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      print("Notification clicked: ${message.messageId}");
+      // Handle notification click
+      if (message.data.isNotEmpty) {
+        NotificationService.handleNotificationClick(message.data);
+      }
+    });
+
+    runApp(const MyApp());
   } catch (e) {
-    print("Error initializing Firebase: $e");
+    print("Error initializing app: $e");
   }
-
-  await NotificationService.initializeNotifications();
-
-  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {

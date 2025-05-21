@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "com.example.untitled"  // ✅ Update to your actual package name
-    compileSdk = 35  // ✅ Ensure this matches the latest SDK version
+    compileSdk = 35  // Updated to support all dependencies
 
     ndkVersion = flutter.ndkVersion
 
@@ -18,6 +18,7 @@ android {
         targetSdk = 34
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        multiDexEnabled true  // Added for handling large number of methods
     }
 
     compileOptions {

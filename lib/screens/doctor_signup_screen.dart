@@ -6,7 +6,7 @@ class DoctorSignupScreen extends StatefulWidget {
   const DoctorSignupScreen({super.key});
 
   @override
-  _DoctorSignupScreenState createState() => _DoctorSignupScreenState();
+  State<DoctorSignupScreen> createState() => _DoctorSignupScreenState();
 }
 
 class _DoctorSignupScreenState extends State<DoctorSignupScreen> {
@@ -23,14 +23,18 @@ class _DoctorSignupScreenState extends State<DoctorSignupScreen> {
   Future<void> _signup() async {
     if (_formKey.currentState!.validate()) {
       try {
-        // 🔹 Register Doctor in Firebase Authentication
-        UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
-          email: email,
+        final userCredential = await _auth.createUserWithEmailAndPassword(
+          email: email.trim(),
           password: password,
         );
 
-        // 🔹 Store Doctor's Details in Firestore Database
-        await _firestore.collection('doctors').doc(userCredential.user!.uid).set({
+        // Send email verification
+        await userCredential.user!.sendEmailVerification();
+
+        await _firestore
+            .collection('doctors')
+            .doc(userCredential.user!.uid)
+            .set({
           'name': name,
           'email': email,
           'phoneNumber': phoneNumber,
@@ -38,64 +42,153 @@ class _DoctorSignupScreenState extends State<DoctorSignupScreen> {
           'uid': userCredential.user!.uid,
         });
 
-        // ✅ Navigate to the Login screen after successful signup
+        // Show a message to the user to check their email
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Signup successful! Please check your email for verification.'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 5),
+          ),
+        );
+
         Navigator.pushReplacementNamed(context, '/login');
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('Signup Failed: ${e.toString()}')),
         );
       }
     }
   }
 
+  Widget _inputField({
+    required String hint,
+    required IconData icon,
+    required Function(String) onChanged,
+    required String? Function(String?) validator,
+    bool obscureText = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: TextFormField(
+        decoration: InputDecoration(
+          hintText: hint,
+          prefixIcon: Icon(icon, color: Colors.black87),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Colors.grey),
+          ),
+        ),
+        onChanged: onChanged,
+        validator: validator,
+        obscureText: obscureText,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Doctor Signup')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              TextFormField(
-                decoration: const InputDecoration(labelText: 'Name'),
-                onChanged: (value) => name = value,
-                validator: (value) => value!.isEmpty ? 'Please enter your name' : null,
+      backgroundColor: const Color(0xFFE6F7F4),
+      appBar: AppBar(
+        title: const Text("Doctor Signup"),
+        backgroundColor: Colors.teal,
+        foregroundColor: Colors.black,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: Center(
+        child: SingleChildScrollView(
+          child: Container(
+            width: 350,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 15,
+                  offset: Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    "Create Your Account",
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.teal,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _inputField(
+                    hint: "Full Name",
+                    icon: Icons.person,
+                    onChanged: (val) => name = val,
+                    validator: (val) =>
+                        val!.isEmpty ? 'Name is required' : null,
+                  ),
+                  _inputField(
+                    hint: "Email Address",
+                    icon: Icons.email,
+                    onChanged: (val) => email = val,
+                    validator: (val) =>
+                        val!.isEmpty ? 'Email is required' : null,
+                  ),
+                  _inputField(
+                    hint: "Phone Number",
+                    icon: Icons.phone,
+                    onChanged: (val) => phoneNumber = val,
+                    validator: (val) =>
+                        val!.isEmpty ? 'Phone number is required' : null,
+                  ),
+                  _inputField(
+                    hint: "Specialization",
+                    icon: Icons.medical_services,
+                    onChanged: (val) => specialization = val,
+                    validator: (val) =>
+                        val!.isEmpty ? 'Specialization is required' : null,
+                  ),
+                  _inputField(
+                    hint: "Password",
+                    icon: Icons.lock,
+                    onChanged: (val) => password = val,
+                    validator: (val) =>
+                        val!.isEmpty ? 'Password is required' : null,
+                    obscureText: true,
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _signup,
+                      icon: const Icon(Icons.check),
+                      label: const Text("Sign Up"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.teal,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              TextFormField(
-                decoration: const InputDecoration(labelText: 'Email'),
-                onChanged: (value) => email = value,
-                validator: (value) => value!.isEmpty ? 'Please enter your email' : null,
-              ),
-              TextFormField(
-                decoration: const InputDecoration(labelText: 'Phone Number'),
-                onChanged: (value) => phoneNumber = value,
-                validator: (value) => value!.isEmpty ? 'Please enter your phone number' : null,
-              ),
-              TextFormField(
-                decoration: const InputDecoration(labelText: 'Specialization'),
-                onChanged: (value) => specialization = value,
-                validator: (value) => value!.isEmpty ? 'Please enter your specialization' : null,
-              ),
-              TextFormField(
-                decoration: const InputDecoration(labelText: 'Password'),
-                obscureText: true,
-                onChanged: (value) => password = value,
-                validator: (value) => value!.isEmpty ? 'Please enter your password' : null,
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _signup,
-                child: const Text('Sign Up'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context); // Go back to the Doctor Screen
-                },
-                child: const Text('Already have an account? Login'),
-              ),
-            ],
+            ),
           ),
         ),
       ),

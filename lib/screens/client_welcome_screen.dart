@@ -1,13 +1,15 @@
-import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import 'profile_selection_screen.dart';
 import 'find_doctor_screen.dart';
-import 'patient_prescription_screen.dart';
-import 'appointment_status_screen.dart';
-import 'patient_profile_completion_screen.dart';
 import 'patient_profile_display_screen.dart';
 import 'patient_chats_list_screen.dart';
+import 'chat_screen.dart';
+import 'patient_profile_completion_screen.dart';
+import 'patient_prescription_screen.dart';
+import 'appointment_status_screen.dart';
 
 class WelcomeScreen extends StatefulWidget {
   final String patientName;
@@ -29,6 +31,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   int unreadNotifications = 0;
   List<Map<String, dynamic>> notifications = [];
   bool showDropdown = false;
+  int _selectedIndex = 0;
 
   @override
   void initState() {
@@ -36,7 +39,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     _updateTime();
     _timer =
         Timer.periodic(const Duration(seconds: 1), (Timer t) => _updateTime());
-    _fetchUnreadNotifications();
+    _setupNotificationsStream();
   }
 
   @override
@@ -59,30 +62,59 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     return '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
   }
 
-  void _fetchUnreadNotifications() {
+  void _setupNotificationsStream() {
     FirebaseFirestore.instance
         .collection('notifications')
-        .where('client_id', isEqualTo: widget.patientId)
-        .where('status', isEqualTo: 'unread') // Use string literal
-        // .where('title', whereIn: ['New Appointment Request', 'Appointment Update'])
-        // .get();
+        .where('receiver_id', isEqualTo: widget.patientId)
+        .where('read', isEqualTo: false)
+        .orderBy('timestamp', descending: true)
         .snapshots()
         .listen((snapshot) {
-      print("Fetched Notifications: ${snapshot.docs.length}");
-      for (var doc in snapshot.docs) {
-        print("Notification: ${doc.data()}");
+      if (mounted) {
+        setState(() {
+          notifications = snapshot.docs.map((doc) {
+            var data = doc.data();
+            data['id'] = doc.id;
+            return data;
+          }).toList();
+        });
       }
-
-      setState(() {
-        unreadNotifications = snapshot.docs.length;
-        notifications = snapshot.docs.map((doc) {
-          return {
-            'id': doc.id, // Assign document ID manually
-            ...doc.data(),
-          };
-        }).toList();
-      });
     });
+  }
+
+  void _handleNotificationClick(Map<String, dynamic> notification) {
+    String type = notification['type'] ?? '';
+    switch (type) {
+      case 'message':
+        if (notification['chat_id'] != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatScreen(
+                chatId: notification['chat_id'],
+                doctorId: notification['sender_id'],
+                patientId: widget.patientId,
+              ),
+            ),
+          );
+        }
+        break;
+      case 'appointment':
+        setState(() {
+          _selectedIndex = 1;
+        });
+        break;
+      case 'prescription':
+        setState(() {
+          _selectedIndex = 2;
+        });
+        break;
+      case 'report':
+        setState(() {
+          _selectedIndex = 3;
+        });
+        break;
+    }
   }
 
   void _toggleDropdown() {
@@ -278,25 +310,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: notifications.isNotEmpty
-                        ? notifications.map((notif) {
-                            return ListTile(
-                              title: Text(notif['title'],
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold)),
-                              subtitle: Text(notif['message'] ?? ''),
-                              onTap: () {
-                                _markAsRead(notif['id']);
-                                _toggleDropdown();
-                              },
-                            );
-                          }).toList()
-                        : [
-                            const Text("No new notifications",
-                                style: TextStyle(color: Colors.grey))
-                          ],
+                  child: SingleChildScrollView(
+                    // 🔥 Scrollable content prevents overflow
+                    child: Column(
+                      mainAxisSize:
+                          MainAxisSize.min, // Avoids unnecessary space
+                      children: notifications.map((notification) {
+                        return _buildNotificationItem(notification);
+                      }).toList(),
+                    ),
                   ),
                 ),
               ),
@@ -314,41 +336,60 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     );
   }
 
-  Widget _buildNotificationDropdown() {
-    return Positioned(
-      top: 60,
-      right: 10,
-      child: Material(
-        elevation: 5,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          width: 250,
-          constraints: BoxConstraints(
-            maxHeight: 400, // Prevents excessive height
-          ),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: SingleChildScrollView(
-            // 🔥 Scrollable content prevents overflow
-            child: Column(
-              mainAxisSize: MainAxisSize.min, // Avoids unnecessary space
-              children: notifications.map((notification) {
-                return ListTile(
-                  title: Text(notification['title'] ?? 'No Title'),
-                  subtitle: Text(notification['body'] ?? 'No Body'),
-                  onTap: () {
-                    setState(() {
-                      showDropdown = false;
-                    });
-                  },
-                );
-              }).toList(),
-            ),
-          ),
-        ),
+  Widget _buildNotificationItem(Map<String, dynamic> notification) {
+    String notifType = notification['type'] ?? 'general';
+    IconData iconData;
+    Color iconColor;
+
+    switch (notifType) {
+      case 'appointment':
+        iconData = Icons.calendar_today;
+        iconColor = Colors.orange;
+        break;
+      case 'message':
+        iconData = Icons.chat;
+        iconColor = Colors.green;
+        break;
+      case 'prescription':
+        iconData = Icons.medication;
+        iconColor = Colors.blue;
+        break;
+      case 'report':
+        iconData = Icons.assessment;
+        iconColor = Colors.purple;
+        break;
+      default:
+        iconData = Icons.notifications;
+        iconColor = Colors.green;
+    }
+
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: iconColor.withOpacity(0.2),
+        child: Icon(iconData, color: iconColor),
       ),
+      title: Text(
+        notification['title'] ?? 'Notification',
+        style: const TextStyle(fontWeight: FontWeight.bold),
+      ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(notification['message'] ?? ''),
+          if (notification['timestamp'] != null)
+            Text(
+              DateFormat('MMM d, h:mm a').format(
+                (notification['timestamp'] as Timestamp).toDate(),
+              ),
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+        ],
+      ),
+      onTap: () {
+        _markAsRead(notification['id']);
+        _handleNotificationClick(notification);
+        setState(() => showDropdown = false);
+      },
     );
   }
 

@@ -47,18 +47,22 @@ dependencies:
   firebase_auth: ^5.5.1
   firebase_storage: ^12.4.2
   firebase_database: ^11.3.2
+  http: ^1.2.0
 
   zego_uikit_prebuilt_call: ^4.16.24
   zego_uikit_signaling_plugin: ^2.8.11
 
-  file_picker: ^8.3.7
+  file_picker: ^10.1.9
   tflite_flutter: ^0.11.0
-  image: ^3.3.0
-  pdf: ^3.8.4
-  share_plus: ^10.1.4
+  image: ^4.5.4
+  pdf: ^3.10.7
+  share_plus: ^11.0.0
   shimmer: ^3.0.0
   package_info_plus: ^8.3.0
-
+  url_launcher: ^6.3.1
+  path: ^1.8.3
+  path_provider: ^2.1.2
+  
 
 
 
@@ -81,7 +85,7 @@ dev_dependencies:
   vector_graphics: ^1.1.18
   vector_graphics_compiler: ^1.1.16
   vm_service: ^14.3.0
-
+  
 
 
 

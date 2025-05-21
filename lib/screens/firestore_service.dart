@@ -5,8 +5,8 @@ class FirestoreService {
 
   // ==================== Appointment Functions ====================
 
-  Future<void> bookAppointment(
-      String clientId, String doctorId, String appointmentType) async {
+  Future<String> bookAppointment(String clientId, String doctorId,
+      {String appointmentType = "Standard Appointment"}) async {
     String appointmentId =
         "appt_${doctorId}_${clientId}_${DateTime.now().millisecondsSinceEpoch}";
 
@@ -18,6 +18,7 @@ class FirestoreService {
       "date_time": Timestamp.now(),
       "appointment_type": appointmentType,
     });
+    return appointmentId;
   }
 
   Future<void> updateAppointmentStatus(
