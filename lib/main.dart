@@ -12,8 +12,8 @@ import 'screens/doctor_signup_screen.dart';
 import 'screens/doctor_login_screen.dart';
 import 'screens/find_doctor_screen.dart';
 import 'screens/doctor_screen.dart';
-import 'screens/client_login_screen.dart';
-import 'screens/client_signup_screen.dart';
+import 'screens/patient_login_screen.dart';
+import 'screens/patient_signup_screen.dart';
 import 'screens/patient_profile_completion_screen.dart';
 import 'screens/patient_profile_display_screen.dart';
 

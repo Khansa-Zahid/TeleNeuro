@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/profile_option_card.dart';
-import 'client_screen.dart';
+import 'patient_screen.dart';
 import 'doctor_screen.dart';
 
 class ProfileSelectionScreen extends StatelessWidget {

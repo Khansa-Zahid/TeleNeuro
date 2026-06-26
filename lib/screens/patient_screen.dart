@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'client_login_screen.dart';
-import 'client_signup_screen.dart';
+import 'patient_login_screen.dart';
+import 'patient_signup_screen.dart';
 
 class ClientScreen extends StatelessWidget {
   const ClientScreen({super.key});
