@@ -51,11 +51,11 @@ lib/
 
 ---
 
-## Screenshots
+<!-- ## Screenshots
 
 > Add your app screenshots here
 
----
+--->
 
 ## Getting Started
 
